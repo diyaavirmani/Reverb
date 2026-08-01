@@ -1,0 +1,4 @@
+﻿id,name,merchantId,adapter,verificationStatus,isActive,createdAt,updatedAt
+provider_local_food_creator,Local Food Creator Network,merchant_local_food_creator,REACH_EXCHANGE,VERIFIED,true,2026-08-01T00:00:00.000Z,2026-08-01T00:00:00.000Z
+provider_poor_geo_evidence,Neighborhood Blast Missing Geo,merchant_poor_geo_evidence,REACH_EXCHANGE,UNVERIFIED,true,2026-08-01T00:00:00.000Z,2026-08-01T00:00:00.000Z
+provider_deadline_or_cpa_invalid,Premium Weekend Push,merchant_deadline_or_cpa_invalid,REACH_EXCHANGE,VERIFIED,true,2026-08-01T00:00:00.000Z,2026-08-01T00:00:00.000Z

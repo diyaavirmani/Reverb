@@ -1,0 +1,1 @@
+﻿id,campaignId,packageId,evidenceIds,score,totalCostPaise,expectedReservations,expectedCpaPaise,discountBps,deterministicBudget,deterministicDeadline,deterministicPrice,deterministicMerchant,deterministicDiscount,deterministicCpa,passesDeterministicChecks,rejectionReasons,generatedSummary,createdAt

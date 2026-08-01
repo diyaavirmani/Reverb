@@ -1,0 +1,32 @@
+[
+  {
+    "id": "provider_reach_local_dining",
+    "name": "Reach Exchange Local Dining Boost",
+    "merchantId": "merchant_reach_local_dining",
+    "adapter": "REACH_EXCHANGE",
+    "verificationStatus": "VERIFIED",
+    "isActive": true,
+    "createdAt": "2026-08-01T00:00:00.000Z",
+    "updatedAt": "2026-08-01T00:00:00.000Z"
+  },
+  {
+    "id": "provider_reach_neighborhood_food",
+    "name": "Reach Exchange Neighborhood Food Blast",
+    "merchantId": "merchant_reach_neighborhood_food",
+    "adapter": "REACH_EXCHANGE",
+    "verificationStatus": "UNVERIFIED",
+    "isActive": true,
+    "createdAt": "2026-08-01T00:00:00.000Z",
+    "updatedAt": "2026-08-01T00:00:00.000Z"
+  },
+  {
+    "id": "provider_reach_premium_weekend",
+    "name": "Reach Exchange Premium Weekend Push",
+    "merchantId": "merchant_reach_premium_weekend",
+    "adapter": "REACH_EXCHANGE",
+    "verificationStatus": "VERIFIED",
+    "isActive": true,
+    "createdAt": "2026-08-01T00:00:00.000Z",
+    "updatedAt": "2026-08-01T00:00:00.000Z"
+  }
+]

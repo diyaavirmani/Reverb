@@ -1,0 +1,1 @@
+﻿id,transactionId,providerId,externalMerchantOrderId,status,currency,amountPaise,scheduledStartAt,scheduledEndAt,paidAt,createdAt,updatedAt

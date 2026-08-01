@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+﻿import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const requiredFixtureDirectories = [
@@ -7,7 +7,8 @@ const requiredFixtureDirectories = [
   "fixtures/senso",
   "fixtures/prava",
   "fixtures/linq",
-  "fixtures/data"
+  "fixtures/data",
+  "fixtures/sheets"
 ];
 
 const missingDirectories = requiredFixtureDirectories.filter(

@@ -10,7 +10,7 @@
         "typecheck": "tsc --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
-        "validate:fixtures": "tsx scripts/validate-fixtures.ts"
+        "validate:fixtures": "tsx scripts/validate-fixtures.ts && tsx scripts/validate-sheet-templates.ts"
     },
     "dependencies": {
         "csv-parse": "^7.0.1",

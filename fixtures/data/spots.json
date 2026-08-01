@@ -1,0 +1,18 @@
+[
+  {
+    "id": "spot_quiet_cup_cafe",
+    "ownerId": "owner_diya_demo",
+    "name": "Quiet Cup Cafe",
+    "category": "CAFE",
+    "timezone": "Asia/Kolkata",
+    "address": {
+      "line1": "12 Market Road",
+      "city": "Bengaluru",
+      "region": "KA",
+      "postalCode": "560001",
+      "countryCode": "IN"
+    },
+    "createdAt": "2026-08-01T00:00:00.000Z",
+    "updatedAt": "2026-08-01T00:00:00.000Z"
+  }
+]
