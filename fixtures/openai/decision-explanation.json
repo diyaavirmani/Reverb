@@ -1,0 +1,22 @@
+﻿{
+  "summary": "The selected package has the strongest local cafe audience, verified geographic evidence, and stays within the owner budget and CPA limits.",
+  "selectedReasons": [
+    "verified_neighbourhood_audience",
+    "within_budget",
+    "within_expected_cpa",
+    "can_publish_before_deadline"
+  ],
+  "rejectedAlternatives": [
+    {
+      "packageId": "pkg_food_creator_geo_weak",
+      "providerId": "provider_geo_weak",
+      "reasons": ["geographic_evidence_unverified"]
+    },
+    {
+      "packageId": "pkg_city_digest_late_cpa",
+      "providerId": "provider_late_cpa",
+      "reasons": ["publication_deadline_too_late", "worst_case_cpa_exceeds_limit"]
+    }
+  ],
+  "riskDisclosure": "The campaign may still underperform if Friday walk-in demand changes, so spending must remain owner-approved and provider checkout must confirm the merchant order before reporting success."
+}

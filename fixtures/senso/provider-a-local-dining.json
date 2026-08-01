@@ -1,0 +1,26 @@
+﻿{
+  "verificationStatus": "VERIFIED",
+  "evidenceConfidence": 0.94,
+  "localAudiencePercent": 82,
+  "historicalBookingMin": 6,
+  "historicalBookingMax": 9,
+  "verifiedPricePaise": 480000,
+  "verifiedDeliverable": "One local food creator reel, one story sequence, and a reservation tracking link for the Friday dinner slot.",
+  "verifiedPublicationDeadline": "2026-08-07T12:30:00.000Z",
+  "cancellationPolicy": "Cancelable until checkout authorisation. Non-refundable after provider scheduling is confirmed.",
+  "sourceReferences": [
+    {
+      "id": "senso_ref_local_audience_a",
+      "label": "Senso local audience overlap report for provider A",
+      "url": "https://senso.example.test/evidence/local-audience-a",
+      "observedAt": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "senso_ref_history_a",
+      "label": "Senso historical booking range for comparable cafe Friday slots",
+      "url": "https://senso.example.test/evidence/history-a",
+      "observedAt": "2026-08-01T00:00:00.000Z"
+    }
+  ],
+  "warnings": []
+}

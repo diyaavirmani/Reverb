@@ -1,0 +1,29 @@
+﻿{
+  "verificationStatus": "VERIFIED",
+  "evidenceConfidence": 0.88,
+  "localAudiencePercent": 76,
+  "historicalBookingMin": 3,
+  "historicalBookingMax": 5,
+  "verifiedPricePaise": 540000,
+  "verifiedDeliverable": "Premium weekend creator push with guaranteed publication after editorial review.",
+  "verifiedPublicationDeadline": "2026-08-07T16:00:00.000Z",
+  "cancellationPolicy": "Non-refundable once the provider accepts the premium weekend placement.",
+  "sourceReferences": [
+    {
+      "id": "senso_ref_verified_c",
+      "label": "Senso verified premium weekend package details",
+      "url": "https://senso.example.test/evidence/verified-c",
+      "observedAt": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "senso_ref_history_c",
+      "label": "Senso conservative booking history for premium weekend food campaigns",
+      "url": "https://senso.example.test/evidence/history-c",
+      "observedAt": "2026-08-01T00:00:00.000Z"
+    }
+  ],
+  "warnings": [
+    "publication_deadline_after_campaign_window",
+    "conservative_cpa_likely_above_campaign_limit"
+  ]
+}

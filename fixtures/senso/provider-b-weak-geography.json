@@ -1,0 +1,23 @@
+﻿{
+  "verificationStatus": "PARTIALLY_VERIFIED",
+  "evidenceConfidence": 0.42,
+  "localAudiencePercent": 18,
+  "historicalBookingMin": 3,
+  "historicalBookingMax": 5,
+  "verifiedPricePaise": 300000,
+  "verifiedDeliverable": "One neighborhood food blast placement with city-wide targeting.",
+  "verifiedPublicationDeadline": "2026-08-07T12:30:00.000Z",
+  "cancellationPolicy": "Cancelable before provider checkout. Publication schedule changes are provider-controlled after order creation.",
+  "sourceReferences": [
+    {
+      "id": "senso_ref_geo_b",
+      "label": "Senso geographic evidence showing mostly city-wide audience distribution",
+      "url": "https://senso.example.test/evidence/geo-b",
+      "observedAt": "2026-08-01T00:00:00.000Z"
+    }
+  ],
+  "warnings": [
+    "weak_geographic_evidence",
+    "local_audience_below_preferred_threshold"
+  ]
+}

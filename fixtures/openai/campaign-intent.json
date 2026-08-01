@@ -1,0 +1,10 @@
+﻿{
+  "unusedCapacity": 12,
+  "targetReservations": 6,
+  "maximumBudgetPaise": 500000,
+  "maximumDiscountPercent": 15,
+  "maximumExpectedCpaPaise": 85000,
+  "startTime": "2026-08-07T13:30:00.000Z",
+  "endTime": "2026-08-07T15:30:00.000Z",
+  "missingFields": []
+}
