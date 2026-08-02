@@ -1,0 +1,162 @@
+{
+  "name": "Reverb Fill - Conversation State",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/conversation-state",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "30000000-0000-4000-8000-000000000001",
+      "name": "Receive State Operation",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-700, 0],
+      "webhookId": "30000000-0000-4000-8000-000000000011"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nconst operations = new Set(['get', 'create', 'update']);\nif (!operations.has(input.operation)) throw new Error('operation must be get, create, or update');\nif (typeof input.conversation_id !== 'string' || input.conversation_id.trim() === '') throw new Error('conversation_id is required');\nconst intakeFields = ['unusedCapacity', 'targetReservations', 'maximumBudgetPaise', 'maximumDiscountPercent', 'maximumExpectedCpaPaise', 'startTime', 'endTime', 'missingFields'];\nconst collected = {};\nif (input.collected_fields && typeof input.collected_fields === 'object' && !Array.isArray(input.collected_fields)) {\n  for (const key of intakeFields) if (Object.prototype.hasOwnProperty.call(input.collected_fields, key)) collected[key] = input.collected_fields[key];\n}\nconst missing = Array.isArray(input.missing_fields) ? input.missing_fields.filter((field) => typeof field === 'string' && intakeFields.includes(field)) : [];\nif (input.operation !== 'get') {\n  if (typeof input.owner_handle !== 'string' || input.owner_handle.trim() === '') throw new Error('owner_handle is required');\n  if (typeof input.spot_id !== 'string' || input.spot_id.trim() === '') throw new Error('spot_id is required');\n}\nreturn [{ json: { operation: input.operation, conversation_id: input.conversation_id.trim(), owner_handle: typeof input.owner_handle === 'string' ? input.owner_handle.trim() : '', spot_id: typeof input.spot_id === 'string' ? input.spot_id.trim() : '', collected_fields_json: JSON.stringify(collected), missing_fields_json: JSON.stringify(missing), updated_at: new Date().toISOString() } }];"
+      },
+      "id": "30000000-0000-4000-8000-000000000002",
+      "name": "Validate Intake State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-470, 0]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.operation }}",
+        "rules": {
+          "rules": [
+            { "value2": "get" },
+            { "value2": "create", "output": 1 },
+            { "value2": "update", "output": 2 }
+          ]
+        },
+        "fallbackOutput": 3
+      },
+      "id": "30000000-0000-4000-8000-000000000003",
+      "name": "Route State Operation",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [-240, 0]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": { "__rl": true, "value": "={{ $env.N8N_CONVERSATION_STATE_TABLE_ID }}", "mode": "id", "cachedResultName": "conversation_state" },
+        "filters": { "conditions": [{ "keyName": "conversation_id", "keyValue": "={{ $json.conversation_id }}" }] },
+        "returnAll": false,
+        "limit": 1
+      },
+      "id": "30000000-0000-4000-8000-000000000004",
+      "name": "Get Conversation State",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [20, -220],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": { "__rl": true, "value": "={{ $env.N8N_CONVERSATION_STATE_TABLE_ID }}", "mode": "id", "cachedResultName": "conversation_state" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $json.conversation_id }}",
+            "owner_handle": "={{ $json.owner_handle }}",
+            "spot_id": "={{ $json.spot_id }}",
+            "collected_fields_json": "={{ $json.collected_fields_json }}",
+            "missing_fields_json": "={{ $json.missing_fields_json }}",
+            "updated_at": "={{ $json.updated_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "conversation_id", "displayName": "conversation_id", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "owner_handle", "displayName": "owner_handle", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "spot_id", "displayName": "spot_id", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "collected_fields_json", "displayName": "collected_fields_json", "type": "string", "required": false, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "missing_fields_json", "displayName": "missing_fields_json", "type": "string", "required": false, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "updated_at", "displayName": "updated_at", "type": "dateTime", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "30000000-0000-4000-8000-000000000005",
+      "name": "Create Conversation State",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [20, -70]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": { "__rl": true, "value": "={{ $env.N8N_CONVERSATION_STATE_TABLE_ID }}", "mode": "id", "cachedResultName": "conversation_state" },
+        "filters": { "conditions": [{ "keyName": "conversation_id", "keyValue": "={{ $json.conversation_id }}" }] },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "owner_handle": "={{ $json.owner_handle }}",
+            "spot_id": "={{ $json.spot_id }}",
+            "collected_fields_json": "={{ $json.collected_fields_json }}",
+            "missing_fields_json": "={{ $json.missing_fields_json }}",
+            "updated_at": "={{ $json.updated_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "conversation_id", "displayName": "conversation_id", "type": "string", "required": false, "defaultMatch": false, "display": true, "readOnly": false, "removed": true },
+            { "id": "owner_handle", "displayName": "owner_handle", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "spot_id", "displayName": "spot_id", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "collected_fields_json", "displayName": "collected_fields_json", "type": "string", "required": false, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "missing_fields_json", "displayName": "missing_fields_json", "type": "string", "required": false, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "updated_at", "displayName": "updated_at", "type": "dateTime", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "30000000-0000-4000-8000-000000000006",
+      "name": "Update Conversation State",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [20, 90]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, operation: $('Validate Intake State').item.json.operation, conversation_id: $('Validate Intake State').item.json.conversation_id, data: $json.event_id === undefined && Object.keys($json).length === 0 ? null : $json } }];"
+      },
+      "id": "30000000-0000-4000-8000-000000000007",
+      "name": "Format State Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [290, -60]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ $json }}", "options": {} },
+      "id": "30000000-0000-4000-8000-000000000008",
+      "name": "Return State Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [520, -60]
+    }
+  ],
+  "connections": {
+    "Receive State Operation": { "main": [[{ "node": "Validate Intake State", "type": "main", "index": 0 }]] },
+    "Validate Intake State": { "main": [[{ "node": "Route State Operation", "type": "main", "index": 0 }]] },
+    "Route State Operation": { "main": [[{ "node": "Get Conversation State", "type": "main", "index": 0 }], [{ "node": "Create Conversation State", "type": "main", "index": 0 }], [{ "node": "Update Conversation State", "type": "main", "index": 0 }], []] },
+    "Get Conversation State": { "main": [[{ "node": "Format State Result", "type": "main", "index": 0 }]] },
+    "Create Conversation State": { "main": [[{ "node": "Format State Result", "type": "main", "index": 0 }]] },
+    "Update Conversation State": { "main": [[{ "node": "Format State Result", "type": "main", "index": 0 }]] },
+    "Format State Result": { "main": [[{ "node": "Return State Result", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveDataSuccessExecution": "none" },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

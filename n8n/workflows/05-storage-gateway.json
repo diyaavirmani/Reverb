@@ -1,0 +1,202 @@
+{
+  "name": "Reverb Fill - Storage Gateway",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/storage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "50000000-0000-4000-8000-000000000001",
+      "name": "Storage Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-980, 0],
+      "webhookId": "50000000-0000-4000-8000-000000000031"
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $json.body ?? $json;\nconst headers = $json.headers ?? {};\nconst timestamp = headers['x-reverb-timestamp'];\nconst received_signature = headers['x-reverb-signature'];\nif (typeof timestamp !== 'string' || typeof received_signature !== 'string') throw new Error('Signed internal request required');\nconst timestampMs = /^\\d+$/.test(timestamp) ? Number(timestamp) * 1000 : Number.NaN;\nif (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 300000) throw new Error('Internal request timestamp is stale');\nif (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Request body must be an object');\nreturn [{ json: { request, request_body_json: JSON.stringify(request), timestamp, received_signature } }];"
+      },
+      "id": "50000000-0000-4000-8000-000000000002",
+      "name": "Normalize Signed Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-760, 0]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.request_body_json }}",
+        "dataPropertyName": "expected_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "50000000-0000-4000-8000-000000000003",
+      "name": "Calculate Expected Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [-540, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const received = String($json.received_signature).replace(/^sha256=/, '');\nif (!/^[a-f0-9]{64}$/i.test(received) || received.toLowerCase() !== String($json.expected_signature).toLowerCase()) throw new Error('Invalid internal request signature');\nconst request = $json.request;\nconst configs = {\n  create_campaign: { required: ['id','spotId','requestedByOwnerId','status','requestSummary','slotStartAt','slotEndAt','unusedCapacity','targetReservations','maxBudgetPaise','maxDiscountBps','maxExpectedCpaPaise','createdAt','updatedAt'], allowed: ['id','spotId','requestedByOwnerId','status','requestSummary','slotStartAt','slotEndAt','unusedCapacity','targetReservations','maxBudgetPaise','maxDiscountBps','maxExpectedCpaPaise','createdAt','updatedAt'] },\n  get_campaign: { required: ['id'], allowed: ['id'] },\n  update_campaign: { required: ['id'], allowed: ['id','spotId','requestedByOwnerId','status','requestSummary','slotStartAt','slotEndAt','unusedCapacity','targetReservations','maxBudgetPaise','maxDiscountBps','maxExpectedCpaPaise','createdAt','updatedAt'] },\n  list_providers: { required: [], allowed: [] },\n  list_packages: { required: [], allowed: ['providerId'] },\n  save_campaign_options: { required: ['id','campaignId','packageId'], allowed: ['id','campaignId','packageId','evidenceIds','score','totalCostPaise','expectedReservations','expectedCpaPaise','discountBps','deterministicBudget','deterministicDeadline','deterministicPrice','deterministicMerchant','deterministicDiscount','deterministicCpa','passesDeterministicChecks','rejectionReasons','generatedSummary','createdAt'], many: true },\n  get_campaign_options: { required: ['campaignId'], allowed: ['campaignId'] },\n  save_campaign_asset: { required: ['id','campaignId','optionId','type','content','generatedBy','requiresOwnerApproval','createdAt'], allowed: ['id','campaignId','optionId','type','content','generatedBy','model','requiresOwnerApproval','createdAt'] },\n  get_campaign_asset: { required: ['campaignId'], allowed: ['campaignId'] },\n  save_transaction: { required: ['id','campaignId','ownerApprovalId','providerId','packageId','status','currency','amountPaise','idempotencyKey','createdAt','updatedAt'], allowed: ['id','campaignId','ownerApprovalId','providerId','packageId','status','currency','amountPaise','idempotencyKey','checkoutAttemptedAt','merchantOrderId','createdAt','updatedAt'] },\n  get_transaction: { required: ['campaignId'], allowed: ['campaignId'] },\n  save_merchant_order: { required: ['id','transactionId','providerId','status','currency','amountPaise','createdAt','updatedAt'], allowed: ['id','transactionId','providerId','externalMerchantOrderId','status','currency','amountPaise','scheduledStartAt','scheduledEndAt','paidAt','createdAt','updatedAt'] },\n  get_merchant_order: { required: ['id'], allowed: ['id'] },\n  save_reservation: { required: ['id','campaignId','spotId','source','customerReference','seatCount','reservationAt','attributedAt','status','isTest'], allowed: ['id','campaignId','activationId','spotId','source','customerReference','seatCount','reservationAt','attributedAt','status','isTest','testLabel'] },\n  list_reservations: { required: ['campaignId'], allowed: ['campaignId'] },\n  append_audit_event: { required: ['campaign_id','event_type','description'], allowed: ['campaign_id','event_type','description','metadata','id','actorType','actorId','occurredAt','idempotencyKey','previousState','nextState'] },\n  list_audit_events: { required: ['campaignId'], allowed: ['campaignId'] }\n};\nconst operation = request.operation;\nconst config = configs[operation];\nif (!config) throw new Error('Unsupported storage operation');\nif (typeof request.request_id !== 'string' || request.request_id.trim() === '') throw new Error('request_id is required');\nconst sourceRecords = config.many ? (Array.isArray(request.data) ? request.data : [request.data]) : [request.data ?? {}];\nif (sourceRecords.length === 0) throw new Error('At least one record is required');\nreturn sourceRecords.map((source) => {\n  if (!source || typeof source !== 'object' || Array.isArray(source)) throw new Error('Operation data must be an object');\n  for (const field of config.required) if (source[field] === undefined || source[field] === null || source[field] === '') throw new Error(`Missing required field: ${field}`);\n  let row = {};\n  for (const field of config.allowed) if (source[field] !== undefined) row[field] = typeof source[field] === 'object' ? JSON.stringify(source[field]) : source[field];\n  if (operation === 'append_audit_event') {\n    const metadata = source.metadata && typeof source.metadata === 'object' && !Array.isArray(source.metadata) ? source.metadata : {};\n    row = { id: source.id ?? request.request_id, entityType: 'Campaign', entityId: source.campaign_id, eventType: source.event_type, actorType: source.actorType ?? 'SYSTEM', actorId: source.actorId ?? 'n8n', occurredAt: source.occurredAt ?? new Date().toISOString(), idempotencyKey: source.idempotencyKey ?? request.request_id, previousState: source.previousState ?? '', nextState: source.nextState ?? '', metadata: JSON.stringify({ ...metadata, description: source.description }) };\n  }\n  return { json: { operation, request_id: request.request_id, ...row } };\n});"
+      },
+      "id": "50000000-0000-4000-8000-000000000004",
+      "name": "Authorize And Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-310, 0]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.operation }}",
+        "rules": {
+          "rules": [
+            { "value2": "create_campaign" },
+            { "value2": "get_campaign", "output": 1 },
+            { "value2": "update_campaign", "output": 2 },
+            { "value2": "list_providers", "output": 3 },
+            { "value2": "list_packages", "output": 4 },
+            { "value2": "save_campaign_options", "output": 5 },
+            { "value2": "get_campaign_options", "output": 6 },
+            { "value2": "save_campaign_asset", "output": 7 },
+            { "value2": "get_campaign_asset", "output": 8 },
+            { "value2": "save_transaction", "output": 9 },
+            { "value2": "get_transaction", "output": 10 },
+            { "value2": "save_merchant_order", "output": 11 },
+            { "value2": "get_merchant_order", "output": 12 },
+            { "value2": "save_reservation", "output": 13 },
+            { "value2": "list_reservations", "output": 14 },
+            { "value2": "append_audit_event", "output": 15 },
+            { "value2": "list_audit_events", "output": 16 }
+          ]
+        },
+        "fallbackOutput": 17
+      },
+      "id": "50000000-0000-4000-8000-000000000005",
+      "name": "Route Storage Operation",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [-80, 0]
+    },
+    {
+      "parameters": { "operation": "append", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Campaigns", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000006", "name": "Create Campaign - Campaigns", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -800]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Campaigns", "mode": "name" }, "filtersUI": { "values": [{ "lookupColumn": "id", "lookupValue": "={{ $json.id }}" }] }, "options": { "returnFirstMatch": true } },
+      "id": "50000000-0000-4000-8000-000000000007", "name": "Get Campaign - Campaigns", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -700], "alwaysOutputData": true
+    },
+    {
+      "parameters": { "operation": "update", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Campaigns", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": ["id"], "schema": [{ "id": "id", "displayName": "id", "type": "string", "canBeUsedToMatch": true, "defaultMatch": true, "display": true, "required": true, "removed": false }], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000008", "name": "Update Campaign - Campaigns", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -600]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Providers", "mode": "name" }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000009", "name": "List Providers - Providers", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -500]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Promotion_Packages", "mode": "name" }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000010", "name": "List Packages - Promotion Packages", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -400]
+    },
+    {
+      "parameters": { "operation": "appendOrUpdate", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Campaign_Options", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": ["id"], "schema": [{ "id": "id", "displayName": "id", "type": "string", "canBeUsedToMatch": true, "defaultMatch": true, "display": true, "required": true, "removed": false }], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000011", "name": "Save Options - Campaign Options", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -300]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Campaign_Options", "mode": "name" }, "filtersUI": { "values": [{ "lookupColumn": "campaignId", "lookupValue": "={{ $json.campaignId }}" }] }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000012", "name": "Get Options - Campaign Options", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -200]
+    },
+    {
+      "parameters": { "operation": "appendOrUpdate", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Campaign_Assets", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": ["id"], "schema": [{ "id": "id", "displayName": "id", "type": "string", "canBeUsedToMatch": true, "defaultMatch": true, "display": true, "required": true, "removed": false }], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000013", "name": "Save Asset - Campaign Assets", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, -100]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Campaign_Assets", "mode": "name" }, "filtersUI": { "values": [{ "lookupColumn": "campaignId", "lookupValue": "={{ $json.campaignId }}" }] }, "options": { "returnFirstMatch": true } },
+      "id": "50000000-0000-4000-8000-000000000014", "name": "Get Asset - Campaign Assets", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 0], "alwaysOutputData": true
+    },
+    {
+      "parameters": { "operation": "appendOrUpdate", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Transactions", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": ["id"], "schema": [{ "id": "id", "displayName": "id", "type": "string", "canBeUsedToMatch": true, "defaultMatch": true, "display": true, "required": true, "removed": false }], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000015", "name": "Save Transaction - Transactions", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 100]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Transactions", "mode": "name" }, "filtersUI": { "values": [{ "lookupColumn": "campaignId", "lookupValue": "={{ $json.campaignId }}" }] }, "options": { "returnFirstMatch": true } },
+      "id": "50000000-0000-4000-8000-000000000016", "name": "Get Transaction - Transactions", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 200], "alwaysOutputData": true
+    },
+    {
+      "parameters": { "operation": "appendOrUpdate", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Merchant_Orders", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": ["id"], "schema": [{ "id": "id", "displayName": "id", "type": "string", "canBeUsedToMatch": true, "defaultMatch": true, "display": true, "required": true, "removed": false }], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000017", "name": "Save Order - Merchant Orders", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 300]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Merchant_Orders", "mode": "name" }, "filtersUI": { "values": [{ "lookupColumn": "id", "lookupValue": "={{ $json.id }}" }] }, "options": { "returnFirstMatch": true } },
+      "id": "50000000-0000-4000-8000-000000000018", "name": "Get Order - Merchant Orders", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 400], "alwaysOutputData": true
+    },
+    {
+      "parameters": { "operation": "appendOrUpdate", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Reservations", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": ["id"], "schema": [{ "id": "id", "displayName": "id", "type": "string", "canBeUsedToMatch": true, "defaultMatch": true, "display": true, "required": true, "removed": false }], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000019", "name": "Save Reservation - Reservations", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 500]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Reservations", "mode": "name" }, "filtersUI": { "values": [{ "lookupColumn": "campaignId", "lookupValue": "={{ $json.campaignId }}" }] }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000020", "name": "List Reservations - Reservations", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 600]
+    },
+    {
+      "parameters": { "operation": "append", "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Audit_Log", "mode": "name" }, "columns": { "mappingMode": "autoMapInputData", "value": {}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000021", "name": "Append Event - Audit Log", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 700]
+    },
+    {
+      "parameters": { "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" }, "sheetName": { "__rl": true, "value": "Audit_Log", "mode": "name" }, "filtersUI": { "values": [{ "lookupColumn": "entityId", "lookupValue": "={{ $json.campaignId }}" }] }, "options": {} },
+      "id": "50000000-0000-4000-8000-000000000022", "name": "List Events - Audit Log", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4.7, "position": [200, 800]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const operation = $('Authorize And Validate').first().json.operation;\nconst request_id = $('Authorize And Validate').first().json.request_id;\nconst rows = $input.all().map((item) => item.json).filter((row) => Object.keys(row).length > 0);\nconst single = new Set(['create_campaign','get_campaign','update_campaign','save_campaign_asset','get_campaign_asset','save_transaction','get_transaction','save_merchant_order','get_merchant_order','save_reservation','append_audit_event']);\nreturn [{ json: { ok: true, operation, request_id, data: single.has(operation) ? (rows[0] ?? null) : rows } }];"
+      },
+      "id": "50000000-0000-4000-8000-000000000023",
+      "name": "Format Storage Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ $json }}", "options": {} },
+      "id": "50000000-0000-4000-8000-000000000024",
+      "name": "Return Storage Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [740, 0]
+    }
+  ],
+  "connections": {
+    "Storage Webhook": { "main": [[{ "node": "Normalize Signed Request", "type": "main", "index": 0 }]] },
+    "Normalize Signed Request": { "main": [[{ "node": "Calculate Expected Signature", "type": "main", "index": 0 }]] },
+    "Calculate Expected Signature": { "main": [[{ "node": "Authorize And Validate", "type": "main", "index": 0 }]] },
+    "Authorize And Validate": { "main": [[{ "node": "Route Storage Operation", "type": "main", "index": 0 }]] },
+    "Route Storage Operation": { "main": [[{ "node": "Create Campaign - Campaigns", "type": "main", "index": 0 }], [{ "node": "Get Campaign - Campaigns", "type": "main", "index": 0 }], [{ "node": "Update Campaign - Campaigns", "type": "main", "index": 0 }], [{ "node": "List Providers - Providers", "type": "main", "index": 0 }], [{ "node": "List Packages - Promotion Packages", "type": "main", "index": 0 }], [{ "node": "Save Options - Campaign Options", "type": "main", "index": 0 }], [{ "node": "Get Options - Campaign Options", "type": "main", "index": 0 }], [{ "node": "Save Asset - Campaign Assets", "type": "main", "index": 0 }], [{ "node": "Get Asset - Campaign Assets", "type": "main", "index": 0 }], [{ "node": "Save Transaction - Transactions", "type": "main", "index": 0 }], [{ "node": "Get Transaction - Transactions", "type": "main", "index": 0 }], [{ "node": "Save Order - Merchant Orders", "type": "main", "index": 0 }], [{ "node": "Get Order - Merchant Orders", "type": "main", "index": 0 }], [{ "node": "Save Reservation - Reservations", "type": "main", "index": 0 }], [{ "node": "List Reservations - Reservations", "type": "main", "index": 0 }], [{ "node": "Append Event - Audit Log", "type": "main", "index": 0 }], [{ "node": "List Events - Audit Log", "type": "main", "index": 0 }], []] },
+    "Create Campaign - Campaigns": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Get Campaign - Campaigns": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Update Campaign - Campaigns": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "List Providers - Providers": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "List Packages - Promotion Packages": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Save Options - Campaign Options": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Get Options - Campaign Options": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Save Asset - Campaign Assets": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Get Asset - Campaign Assets": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Save Transaction - Transactions": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Get Transaction - Transactions": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Save Order - Merchant Orders": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Get Order - Merchant Orders": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Save Reservation - Reservations": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "List Reservations - Reservations": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Append Event - Audit Log": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "List Events - Audit Log": { "main": [[{ "node": "Format Storage Response", "type": "main", "index": 0 }]] },
+    "Format Storage Response": { "main": [[{ "node": "Return Storage Response", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveDataSuccessExecution": "none" },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

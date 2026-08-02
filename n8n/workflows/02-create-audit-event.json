@@ -1,0 +1,99 @@
+{
+  "name": "Reverb Fill - Create Audit Event",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/create-audit-event",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "20000000-0000-4000-8000-000000000001",
+      "name": "Receive Audit Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-700, 0],
+      "webhookId": "20000000-0000-4000-8000-000000000011"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nfor (const field of ['campaign_id', 'event_type', 'description']) {\n  if (typeof input[field] !== 'string' || input[field].trim() === '') throw new Error(`Missing required field: ${field}`);\n}\nconst data = { campaign_id: input.campaign_id.trim(), event_type: input.event_type.trim(), description: input.description.trim(), metadata: input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata) ? input.metadata : {} };\nconst request_body = { operation: 'append_audit_event', request_id: `audit:${data.campaign_id}:${data.event_type}:${Date.now()}`, data };\nreturn [{ json: { request_body, request_body_json: JSON.stringify(request_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "20000000-0000-4000-8000-000000000002",
+      "name": "Validate And Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-470, 0]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.request_body_json }}",
+        "dataPropertyName": "internal_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "20000000-0000-4000-8000-000000000003",
+      "name": "Sign Storage Request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [-240, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "content-type", "value": "application/json" },
+            { "name": "x-reverb-timestamp", "value": "={{ $json.timestamp }}" },
+            { "name": "x-reverb-signature", "value": "={{ 'sha256=' + $json.internal_signature }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.request_body }}",
+        "options": {}
+      },
+      "id": "20000000-0000-4000-8000-000000000004",
+      "name": "Store Audit Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "if ($json.ok === false) throw new Error('Storage gateway rejected the audit event.');\nreturn [{ json: { ok: true, audit_event: $json.data ?? $json } }];"
+      },
+      "id": "20000000-0000-4000-8000-000000000005",
+      "name": "Format Stored Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "20000000-0000-4000-8000-000000000006",
+      "name": "Return Audit Event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [470, 0]
+    }
+  ],
+  "connections": {
+    "Receive Audit Event": { "main": [[{ "node": "Validate And Prepare", "type": "main", "index": 0 }]] },
+    "Validate And Prepare": { "main": [[{ "node": "Sign Storage Request", "type": "main", "index": 0 }]] },
+    "Sign Storage Request": { "main": [[{ "node": "Store Audit Event", "type": "main", "index": 0 }]] },
+    "Store Audit Event": { "main": [[{ "node": "Format Stored Event", "type": "main", "index": 0 }]] },
+    "Format Stored Event": { "main": [[{ "node": "Return Audit Event", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveDataSuccessExecution": "none" },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

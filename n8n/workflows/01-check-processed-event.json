@@ -1,0 +1,168 @@
+{
+  "name": "Reverb Fill - Check Processed Event",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/check-processed-event",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000001",
+      "name": "Receive Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-760, 0],
+      "webhookId": "10000000-0000-4000-8000-000000000011"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nfor (const field of ['event_id', 'event_type', 'source']) {\n  if (typeof input[field] !== 'string' || input[field].trim() === '') {\n    throw new Error(`Missing required field: ${field}`);\n  }\n}\nreturn [{ json: { event_id: input.event_id.trim(), event_type: input.event_type.trim(), source: input.source.trim(), result_json: input.result_json === undefined ? '{}' : JSON.stringify(input.result_json), processed_at: new Date().toISOString() } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000002",
+      "name": "Validate Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-540, 0]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "={{ $env.N8N_PROCESSED_EVENTS_TABLE_ID }}",
+          "mode": "id",
+          "cachedResultName": "processed_events"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "event_id",
+              "keyValue": "={{ $json.event_id }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "10000000-0000-4000-8000-000000000003",
+      "name": "Find Processed Event",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-320, 0],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "10000000-0000-4000-8000-000000000012",
+              "leftValue": "={{ Boolean($json.event_id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000004",
+      "name": "Already Processed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-100, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, is_duplicate: true, event_id: $('Validate Event').item.json.event_id } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000005",
+      "name": "Format Duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [140, -120]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "={{ $env.N8N_PROCESSED_EVENTS_TABLE_ID }}",
+          "mode": "id",
+          "cachedResultName": "processed_events"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $('Validate Event').item.json.event_id }}",
+            "event_type": "={{ $('Validate Event').item.json.event_type }}",
+            "source": "={{ $('Validate Event').item.json.source }}",
+            "processed_at": "={{ $('Validate Event').item.json.processed_at }}",
+            "result_json": "={{ $('Validate Event').item.json.result_json }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "event_id", "displayName": "event_id", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "event_type", "displayName": "event_type", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "source", "displayName": "source", "type": "string", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "processed_at", "displayName": "processed_at", "type": "dateTime", "required": true, "defaultMatch": false, "display": true, "readOnly": false, "removed": false },
+            { "id": "result_json", "displayName": "result_json", "type": "string", "required": false, "defaultMatch": false, "display": true, "readOnly": false, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000006",
+      "name": "Record Processed Event",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [140, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, is_duplicate: false, event_id: $('Validate Event').item.json.event_id } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000007",
+      "name": "Format New Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [360, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000008",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [580, 0]
+    }
+  ],
+  "connections": {
+    "Receive Event": { "main": [[{ "node": "Validate Event", "type": "main", "index": 0 }]] },
+    "Validate Event": { "main": [[{ "node": "Find Processed Event", "type": "main", "index": 0 }]] },
+    "Find Processed Event": { "main": [[{ "node": "Already Processed?", "type": "main", "index": 0 }]] },
+    "Already Processed?": { "main": [[{ "node": "Format Duplicate", "type": "main", "index": 0 }], [{ "node": "Record Processed Event", "type": "main", "index": 0 }]] },
+    "Format Duplicate": { "main": [[{ "node": "Return Result", "type": "main", "index": 0 }]] },
+    "Record Processed Event": { "main": [[{ "node": "Format New Event", "type": "main", "index": 0 }]] },
+    "Format New Event": { "main": [[{ "node": "Return Result", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveDataSuccessExecution": "none" },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}
