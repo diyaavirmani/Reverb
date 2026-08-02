@@ -5,9 +5,7 @@ import { createReachExchangeService, parseJson, reachFailure } from "../../../_s
 export const runtime = "nodejs";
 
 type RouteContext = {
-  params: {
-    orderId: string;
-  };
+  params: Promise<{ orderId: string }> | { orderId: string };
 };
 
 export async function POST(request: Request, context: RouteContext) {
@@ -18,7 +16,8 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    const result = await createReachExchangeService().deliver(context.params.orderId, body.value);
+    const { orderId } = await context.params;
+    const result = await createReachExchangeService().deliver(orderId, body.value);
     return NextResponse.json(result);
   } catch (error) {
     return reachFailure(error);

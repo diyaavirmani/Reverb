@@ -128,7 +128,7 @@ describe("LocalFixtureRepository", () => {
       currency: "INR",
       amountPaise: 480000,
       idempotencyKey: "idem_test_001",
-      pravaAuthorizationId: "prava_test_001",
+      pravaAuthorizationId: null,
       checkoutAttemptedAt: now,
       merchantOrderId: "merchant_order_test_001",
       createdAt: now,

@@ -1,0 +1,12 @@
+{
+  "id": "linq_event_fixture_001",
+  "type": "message.received",
+  "conversation": {
+    "id": "linq_conversation_fixture_001"
+  },
+  "message": {
+    "from": "+919900000001",
+    "to": "+919900000002",
+    "text": "Please fill Friday evening seats."
+  }
+}

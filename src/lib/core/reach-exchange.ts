@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { hashPayload } from "../security/signatures";
 import type { StorageRepository } from "../repositories";
@@ -6,6 +6,7 @@ import {
   AuditEventSchema,
   CampaignAssetSchema,
   MerchantOrderSchema,
+  ReachActivateRequestSchema,
   ReachActivationResultSchema,
   ReachCheckoutRequestSchema,
   ReachCheckoutResultSchema,
@@ -81,7 +82,15 @@ export class ReachExchangeService {
 
   async checkout(input: ReachCheckoutRequest): Promise<ReachCheckoutResult> {
     const request = ReachCheckoutRequestSchema.parse(input);
-    const requestHash = hashPayload(request);
+    // The Prava authorization is a one-time credential. It is validated at the
+    // boundary but deliberately excluded from all durable idempotency data.
+    const requestHash = hashPayload({
+      campaignId: request.campaignId,
+      packageId: request.packageId,
+      approvedMerchantId: request.approvedMerchantId,
+      approvedAmountPaise: request.approvedAmountPaise,
+      idempotencyKey: request.idempotencyKey
+    });
     const existingOrder = await this.findOrderByIdempotencyKey(request.idempotencyKey, requestHash);
 
     if (existingOrder !== null) {
@@ -165,8 +174,7 @@ export class ReachExchangeService {
           merchantName: reachMerchantName,
           requestHash,
           orderId: order.id,
-          externalMerchantOrderId: order.externalMerchantOrderId,
-          paymentAuthorisationReference: request.paymentAuthorisationReference
+                    externalMerchantOrderId: order.externalMerchantOrderId
         }
       })
     );
@@ -194,6 +202,29 @@ export class ReachExchangeService {
 
   async deliver(orderId: string, input: unknown): Promise<ReachDeliveryResult> {
     const request = ReachDeliverRequestSchema.parse(input);
+    const requestHash = hashPayload({
+      orderId,
+      approvedCreative: request.approvedCreative,
+      campaignBrief: request.campaignBrief
+    });
+    const existingEvent = await this.findIdempotentOperation(
+      "REACH_ORDER_DELIVERED",
+      request.idempotencyKey,
+      requestHash
+    );
+
+    if (existingEvent !== null) {
+      const storedResult = ReachDeliveryResultSchema.safeParse(existingEvent.metadata.deliveryResult);
+      if (!storedResult.success) {
+        throw new ReachExchangeError(
+          "IDEMPOTENCY_RESULT_MISSING",
+          "Idempotent Reach delivery record is missing its original result.",
+          500
+        );
+      }
+      return storedResult.data;
+    }
+
     const order = await this.requireMerchantOrder(orderId);
 
     if (order.status !== "CREATED" && order.status !== "BRIEF_DELIVERED") {
@@ -242,12 +273,24 @@ export class ReachExchangeService {
       status: "BRIEF_DELIVERED",
       updatedAt: now
     });
+    const result = ReachDeliveryResultSchema.parse({
+      order: {
+        ...details,
+        order: updatedOrder,
+        delivered: true,
+        creativeAssetId,
+        briefAssetId
+      },
+      creativeAssetId,
+      briefAssetId
+    });
 
     await this.repository.saveMerchantOrder(updatedOrder);
     await this.repository.appendAuditEvent(
       this.auditEvent({
         entityId: order.id,
         eventType: "REACH_ORDER_DELIVERED",
+        idempotencyKey: request.idempotencyKey,
         previousState: order.status,
         nextState: updatedOrder.status,
         metadata: {
@@ -256,19 +299,39 @@ export class ReachExchangeService {
           merchantId: details.merchantId,
           merchantName: reachMerchantName,
           creativeAssetId,
-          briefAssetId
+          briefAssetId,
+          requestHash,
+          deliveryResult: result
         }
       })
     );
 
-    return ReachDeliveryResultSchema.parse({
-      order: await this.getOrderDetails(order.id),
-      creativeAssetId,
-      briefAssetId
-    });
+    return result;
   }
 
-  async activate(orderId: string): Promise<ReachActivationResult> {
+  async activate(orderId: string, input: unknown): Promise<ReachActivationResult> {
+    const request = ReachActivateRequestSchema.parse(input);
+    const requestHash = hashPayload({ orderId });
+    const existingEvent = await this.findIdempotentOperation(
+      "REACH_ORDER_ACTIVATED",
+      request.idempotencyKey,
+      requestHash
+    );
+
+    if (existingEvent !== null) {
+      const storedResult = ReachActivationResultSchema.safeParse(
+        existingEvent.metadata.activationResult
+      );
+      if (!storedResult.success) {
+        throw new ReachExchangeError(
+          "IDEMPOTENCY_RESULT_MISSING",
+          "Idempotent Reach activation record is missing its original result.",
+          500
+        );
+      }
+      return storedResult.data;
+    }
+
     const order = await this.requireMerchantOrder(orderId);
 
     if (order.status === "CREATED") {
@@ -301,12 +364,22 @@ export class ReachExchangeService {
       status: "ACTIVE",
       updatedAt: now
     });
+    const result = ReachActivationResultSchema.parse({
+      order: {
+        ...details,
+        order: updatedOrder,
+        activated: true,
+        publicActivationUrl
+      },
+      publicActivationUrl
+    });
 
     await this.repository.saveMerchantOrder(updatedOrder);
     await this.repository.appendAuditEvent(
       this.auditEvent({
         entityId: order.id,
         eventType: "REACH_ORDER_ACTIVATED",
+        idempotencyKey: request.idempotencyKey,
         previousState: order.status,
         nextState: updatedOrder.status,
         metadata: {
@@ -314,17 +387,15 @@ export class ReachExchangeService {
           packageId: details.packageId,
           merchantId: details.merchantId,
           merchantName: reachMerchantName,
-          publicActivationUrl
+          publicActivationUrl,
+          requestHash,
+          activationResult: result
         }
       })
     );
 
-    return ReachActivationResultSchema.parse({
-      order: await this.getOrderDetails(order.id),
-      publicActivationUrl
-    });
+    return result;
   }
-
   private toReachPackage(promotionPackage: PromotionPackage): ReachPackage {
     const quote = this.toQuote(promotionPackage);
 
@@ -422,6 +493,30 @@ export class ReachExchangeService {
     return this.requireMerchantOrder(orderId);
   }
 
+  private async findIdempotentOperation(
+    eventType: "REACH_ORDER_DELIVERED" | "REACH_ORDER_ACTIVATED",
+    idempotencyKey: string,
+    requestHash: string
+  ): Promise<AuditEvent | null> {
+    const events = await this.repository.listAuditEvents({ entityType: "MERCHANT_ORDER" });
+    const existingEvent = events.find(
+      (event) => event.eventType === eventType && event.idempotencyKey === idempotencyKey
+    );
+
+    if (existingEvent === undefined) {
+      return null;
+    }
+
+    if (existingEvent.metadata.requestHash !== requestHash) {
+      throw new ReachExchangeError(
+        "IDEMPOTENCY_CONFLICT",
+        "Idempotency key was already used for a different Reach operation payload.",
+        409
+      );
+    }
+
+    return existingEvent;
+  }
   private async orderEvents(orderId: string): Promise<AuditEvent[]> {
     return this.repository.listAuditEvents({ entityType: "MERCHANT_ORDER", entityId: orderId });
   }

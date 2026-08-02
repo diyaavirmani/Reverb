@@ -217,7 +217,7 @@ function completedTransaction(): Transaction {
     currency: "INR",
     amountPaise: 480000,
     idempotencyKey: "idem_reservation_performance",
-    pravaAuthorizationId: "fixture_prava_authorized",
+    pravaAuthorizationId: null,
     checkoutAttemptedAt: now,
     merchantOrderId: "merchant_order_reservation_performance",
     createdAt: now,

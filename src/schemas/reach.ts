@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 import {
   MerchantOrderSchema,
@@ -101,11 +101,20 @@ export type ReachOrderDetails = z.infer<typeof ReachOrderDetailsSchema>;
 export const ReachDeliverRequestSchema = z
   .object({
     approvedCreative: nonEmptyStringSchema,
-    campaignBrief: nonEmptyStringSchema
+    campaignBrief: nonEmptyStringSchema,
+    idempotencyKey: nonEmptyStringSchema
   })
   .strict();
 
 export type ReachDeliverRequest = z.infer<typeof ReachDeliverRequestSchema>;
+
+export const ReachActivateRequestSchema = z
+  .object({
+    idempotencyKey: nonEmptyStringSchema
+  })
+  .strict();
+
+export type ReachActivateRequest = z.infer<typeof ReachActivateRequestSchema>;
 
 export const ReachDeliveryResultSchema = z
   .object({

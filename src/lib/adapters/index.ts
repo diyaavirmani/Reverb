@@ -13,6 +13,8 @@ export type {
   IntegrationAdapters,
   IntegrationName,
   LinqAdapter,
+  LinqSendMessageRequest,
+  LinqSendMessageResult,
   N8nStorageAdapter,
   OpenAIAdapter,
   OpenAIExplainProviderDecisionRequest,

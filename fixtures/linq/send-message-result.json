@@ -1,0 +1,6 @@
+{
+  "messageId": "fixture_linq_message",
+  "accepted": true,
+  "idempotencyKey": "fixture_idempotency_template",
+  "isFixture": true
+}

@@ -4,3 +4,4 @@ export * from "./senso";
 export * from "./prava";
 export * from "./reach";
 export * from "./reservations";
+export * from "./linq";

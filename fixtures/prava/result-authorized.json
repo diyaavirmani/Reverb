@@ -1,10 +1,10 @@
-﻿{
+{
   "sessionId": "fixture_prava_authorized",
   "campaignId": "campaign_demo_friday",
   "status": "AUTHORIZED",
   "currency": "INR",
   "amountPaise": 480000,
-  "authorizationId": "fixture_prava_auth_123",
+  "authorizationId": null,
   "completedAt": null,
   "expiresAt": "2026-08-01T00:15:00.000Z",
   "declinedReason": null,

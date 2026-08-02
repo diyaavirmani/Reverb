@@ -5,16 +5,13 @@ import { createReservationService, reservationFailure } from "../../../reservati
 export const runtime = "nodejs";
 
 type RouteContext = {
-  params: {
-    campaignId: string;
-  };
+  params: Promise<{ campaignId: string }> | { campaignId: string };
 };
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    const result = await createReservationService().getCampaignPerformance(
-      context.params.campaignId
-    );
+    const { campaignId } = await context.params;
+    const result = await createReservationService().getCampaignPerformance(campaignId);
     return NextResponse.json(result);
   } catch (error) {
     return reservationFailure(error);

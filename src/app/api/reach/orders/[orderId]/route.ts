@@ -5,14 +5,13 @@ import { createReachExchangeService, reachFailure } from "../../_shared";
 export const runtime = "nodejs";
 
 type RouteContext = {
-  params: {
-    orderId: string;
-  };
+  params: Promise<{ orderId: string }> | { orderId: string };
 };
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    const result = await createReachExchangeService().getOrderDetails(context.params.orderId);
+    const { orderId } = await context.params;
+    const result = await createReachExchangeService().getOrderDetails(orderId);
     return NextResponse.json(result);
   } catch (error) {
     return reachFailure(error);

@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 
 import type { IntegrationAdapters } from "../adapters";
 import type { StorageRepository } from "../repositories";
-import { generateIdempotencyKey } from "../security/idempotency";
+import {
+  InMemoryPaymentAttemptGuard,
+  generateIdempotencyKey,
+  type PaymentAttemptGuard
+} from "../security/idempotency";
 import { transitionCampaign } from "./campaign-state-machine";
 import {
   evaluatePromotionPackage,
@@ -11,22 +15,26 @@ import {
   type PromotionPolicyPackage
 } from "./policy-engine";
 import { scorePromotionPackage, selectBestPackage, type ProviderScoredPackage } from "./provider-scoring";
-import { ReachExchangeService } from "./reach-exchange";
+import { ReachExchangeError, ReachExchangeService } from "./reach-exchange";
 import { ReservationService } from "./reservations";
 import {
+  AuditEventSchema,
   CampaignAssetSchema,
   CampaignDecisionSchema,
   CampaignPerformanceReportSchema,
   CampaignSchema,
   OwnerApprovalSchema,
   QualityReviewSchema,
+  ReachCheckoutResultSchema,
   TransactionSchema,
   type Campaign,
   type CampaignOption,
   type CampaignStatus,
+  type MerchantOrder,
   type OpenAIQualityReview,
   type PromotionPackage,
   type PromotionProvider,
+  type ReachCheckoutResult,
   type ReservationSubmission,
   type SensoProviderVerification,
   type Spot
@@ -48,17 +56,27 @@ export class CampaignServiceError extends Error {
   }
 }
 
+export type CampaignServiceOptions = {
+  paymentAttemptGuard?: PaymentAttemptGuard;
+  checkoutProvider?: Pick<ReachExchangeService, "checkout">;
+};
+
 export class CampaignService {
   private readonly reach: ReachExchangeService;
   private readonly reservations: ReservationService;
+  private readonly paymentAttemptGuard: PaymentAttemptGuard;
+  private readonly checkoutProvider: Pick<ReachExchangeService, "checkout">;
 
   constructor(
     private readonly repository: StorageRepository,
     private readonly adapters: IntegrationAdapters,
-    private readonly clock: () => Date = () => new Date()
+    private readonly clock: () => Date = () => new Date(),
+    options: CampaignServiceOptions = {}
   ) {
     this.reach = new ReachExchangeService(repository, clock);
     this.reservations = new ReservationService(repository, clock);
+    this.paymentAttemptGuard = options.paymentAttemptGuard ?? new InMemoryPaymentAttemptGuard();
+    this.checkoutProvider = options.checkoutProvider ?? this.reach;
   }
 
   async createCampaignFromIntent(input: {
@@ -367,6 +385,7 @@ export class CampaignService {
 
   async createPaymentSession(input: { campaignId: string; callbackUrl?: string }) {
     const campaign = await this.requireCampaign(input.campaignId);
+    this.assertCampaignStatus(campaign, "PRAVA_PENDING", "create a payment session");
     const selectedOption = await this.requireSelectedOption(campaign.id);
     const approval = await this.requireApproval(campaign.id);
     const promotionPackage = await this.requirePromotionPackage(selectedOption.packageId);
@@ -393,7 +412,7 @@ export class CampaignService {
       currency: "INR",
       amountPaise: session.amountPaise,
       idempotencyKey,
-      pravaAuthorizationId: session.authorizationId,
+      pravaAuthorizationId: null,
       checkoutAttemptedAt: null,
       merchantOrderId: null,
       createdAt: now,
@@ -401,7 +420,18 @@ export class CampaignService {
     });
 
     await this.repository.saveTransaction(transaction);
-    await this.adapters.n8nStorage.saveRecord(sessions, campaign.id, { campaignId: campaign.id, session, idempotencyKey, transactionId: transaction.id, createdAt: now });
+    await this.adapters.n8nStorage.saveRecord(sessions, campaign.id, {
+      campaignId: campaign.id,
+      providerSessionId: session.sessionId,
+      sessionStatus: session.status,
+      currency: session.currency,
+      amountPaise: session.amountPaise,
+      expiresAt: session.expiresAt,
+      isFixture: session.isFixture,
+      idempotencyKey,
+      transactionId: transaction.id,
+      createdAt: now
+    });
     await this.repository.appendAuditEvent({
       id: `audit_${randomUUID()}`,
       entityType: "TRANSACTION",
@@ -412,65 +442,172 @@ export class CampaignService {
       idempotencyKey,
       previousState: null,
       nextState: transaction.status,
-      metadata: { campaignId: campaign.id, sessionId: session.sessionId, amountPaise: transaction.amountPaise, isFixture: session.isFixture }
+      metadata: {
+        campaignId: campaign.id,
+        providerSessionId: session.sessionId,
+        amountPaise: transaction.amountPaise,
+        isFixture: session.isFixture
+      }
     });
     return { campaign, transaction, sessionId: session.sessionId, checkoutUrl: session.checkoutUrl };
   }
 
   async completeMerchantCheckout(input: { campaignId: string; sessionId?: string }) {
     let campaign = await this.requireCampaign(input.campaignId);
+    const existingTransaction = await this.requireTransaction(campaign.id);
+
+    if (existingTransaction.checkoutAttemptedAt !== null) {
+      throw checkoutAlreadyAttempted(campaign.id);
+    }
+
+    this.assertCampaignStatus(campaign, "PRAVA_PENDING", "complete merchant checkout");
+    await this.requireApproval(campaign.id);
     const selectedOption = await this.requireSelectedOption(campaign.id);
     const promotionPackage = await this.requirePromotionPackage(selectedOption.packageId);
     const paymentSession = await this.requirePaymentSession(campaign.id);
-    const sessionId = input.sessionId ?? paymentSession.session.sessionId;
-    const existingTransaction = await this.requireTransaction(campaign.id);
-    if (existingTransaction.checkoutAttemptedAt !== null) {
-      throw new CampaignServiceError("CHECKOUT_ALREADY_ATTEMPTED", "A Prava credential cannot be reused after checkout is attempted.", 409);
+    const sessionId = input.sessionId ?? paymentSession.providerSessionId;
+    const existingGuardState = await this.paymentAttemptGuard.getState(campaign.id);
+
+    if (existingGuardState !== null) {
+      throw checkoutAlreadyAttempted(campaign.id);
     }
-    const paymentResult = await this.adapters.prava.getPaymentResult({ campaignId: campaign.id, sessionId, idempotencyKey: paymentSession.idempotencyKey });
+
+    const paymentResult = await this.adapters.prava.getPaymentResult({
+      campaignId: campaign.id,
+      sessionId,
+      idempotencyKey: paymentSession.idempotencyKey
+    });
 
     if (paymentResult.status !== "AUTHORIZED" || paymentResult.authorizationId === null) {
-      await this.transition(campaign, paymentFailureStatus(paymentResult.status), "PRAVA_PAYMENT_NOT_AUTHORIZED", "Prava payment result did not authorize checkout.", { sessionId, paymentStatus: paymentResult.status }, "PRAVA");
+      const failedTransaction = TransactionSchema.parse({
+        ...existingTransaction,
+        status: paymentTransactionFailureStatus(paymentResult.status),
+        pravaAuthorizationId: null,
+        updatedAt: this.now()
+      });
+      await this.saveTransactionState(
+        existingTransaction,
+        failedTransaction,
+        "PRAVA_PAYMENT_NOT_AUTHORIZED",
+        paymentSession.idempotencyKey,
+        { paymentStatus: paymentResult.status }
+      );
+      await this.transition(
+        campaign,
+        paymentFailureStatus(paymentResult.status),
+        "PRAVA_PAYMENT_NOT_AUTHORIZED",
+        "Prava payment result did not authorize checkout.",
+        { transactionId: failedTransaction.id, paymentStatus: paymentResult.status },
+        "PRAVA"
+      );
       throw new CampaignServiceError("PAYMENT_NOT_AUTHORIZED", "Payment was not authorized by Prava.", 409);
     }
 
-    let transaction = TransactionSchema.parse({ ...existingTransaction, status: "AUTHORIZED", pravaAuthorizationId: paymentResult.authorizationId, updatedAt: this.now() });
-    await this.repository.saveTransaction(transaction);
-    campaign = await this.transition(campaign, "PAYMENT_AUTHORIZED", "PRAVA_PAYMENT_AUTHORIZED", "Prava authorized the owner-approved checkout.", { sessionId, transactionId: transaction.id }, "PRAVA");
-    campaign = await this.transition(campaign, "CHECKOUT_IN_PROGRESS", "MERCHANT_CHECKOUT_STARTED", "Provider checkout started after Prava authorization.", { packageId: promotionPackage.id, transactionId: transaction.id });
-
-    const checkout = await this.reach.checkout({
-      campaignId: campaign.id,
-      packageId: promotionPackage.id,
-      approvedMerchantId: promotionPackage.merchantId,
-      approvedAmountPaise: selectedOption.totalCostPaise,
-      idempotencyKey: generateIdempotencyKey("reach-checkout", campaign.id, promotionPackage.id),
-      paymentAuthorisationReference: paymentResult.authorizationId
+    let transaction = TransactionSchema.parse({
+      ...existingTransaction,
+      status: "AUTHORIZED",
+      pravaAuthorizationId: null,
+      updatedAt: this.now()
     });
-    const order = await this.repository.getMerchantOrder(checkout.orderId);
-    if (order === null) {
-      throw new CampaignServiceError("MERCHANT_ORDER_MISSING", "Merchant order must exist before checkout can be reported successful.", 500);
+    await this.saveTransactionState(
+      existingTransaction,
+      transaction,
+      "PRAVA_PAYMENT_AUTHORIZED",
+      paymentSession.idempotencyKey,
+      { providerSessionId: sessionId }
+    );
+    campaign = await this.transition(
+      campaign,
+      "PAYMENT_AUTHORIZED",
+      "PRAVA_PAYMENT_AUTHORIZED",
+      "Prava authorized the owner-approved checkout.",
+      { providerSessionId: sessionId, transactionId: transaction.id },
+      "PRAVA"
+    );
+    campaign = await this.transition(
+      campaign,
+      "CHECKOUT_IN_PROGRESS",
+      "MERCHANT_CHECKOUT_STARTED",
+      "Provider checkout started after Prava authorization.",
+      { packageId: promotionPackage.id, transactionId: transaction.id }
+    );
+
+    await this.paymentAttemptGuard.acquire(campaign.id, sessionId);
+    const checkoutIdempotencyKey = generateIdempotencyKey(
+      "reach-checkout",
+      campaign.id,
+      promotionPackage.id
+    );
+    const attemptedTransaction = TransactionSchema.parse({
+      ...transaction,
+      status: "CHECKOUT_ATTEMPTED",
+      pravaAuthorizationId: null,
+      checkoutAttemptedAt: this.now(),
+      updatedAt: this.now()
+    });
+    await this.saveTransactionState(
+      transaction,
+      attemptedTransaction,
+      "MERCHANT_CHECKOUT_ATTEMPTED",
+      checkoutIdempotencyKey,
+      { packageId: promotionPackage.id, merchantId: promotionPackage.merchantId }
+    );
+    await this.paymentAttemptGuard.markAttempted(campaign.id, sessionId);
+    transaction = attemptedTransaction;
+
+    let checkout: ReachCheckoutResult;
+    let order: MerchantOrder | null;
+
+    try {
+      checkout = await this.checkoutProvider.checkout({
+        campaignId: campaign.id,
+        packageId: promotionPackage.id,
+        approvedMerchantId: promotionPackage.merchantId,
+        approvedAmountPaise: selectedOption.totalCostPaise,
+        idempotencyKey: checkoutIdempotencyKey,
+        paymentAuthorisationReference: paymentResult.authorizationId
+      });
+      order = await this.repository.getMerchantOrder(checkout.orderId);
+
+      if (order === null) {
+        throw new CampaignServiceError(
+          "MERCHANT_ORDER_MISSING",
+          "Merchant order must exist before checkout can be reported successful.",
+          500
+        );
+      }
+    } catch (error) {
+      order = await this.reconcileMerchantOrder(checkoutIdempotencyKey);
+
+      if (order === null) {
+        await this.failCheckout({
+          campaign,
+          transaction,
+          sessionId,
+          promotionPackage,
+          checkoutIdempotencyKey,
+          error
+        });
+        throw safeCheckoutError(error);
+      }
+
+      checkout = this.reconciledCheckoutResult(
+        campaign.id,
+        promotionPackage,
+        checkoutIdempotencyKey,
+        order
+      );
     }
 
-    transaction = TransactionSchema.parse({ ...transaction, status: "COMPLETED", checkoutAttemptedAt: this.now(), merchantOrderId: order.id, updatedAt: this.now() });
-    await this.repository.saveTransaction(transaction);
-    await this.adapters.prava.reportCheckoutOutcome({
-      campaignId: campaign.id,
-      merchantId: promotionPackage.merchantId,
-      packageId: promotionPackage.id,
-      merchantName: checkout.merchantName,
-      packageName: promotionPackage.title,
-      amountPaise: checkout.amountPaise,
-      currency: "INR",
-      callbackUrl,
-      idempotencyKey: paymentSession.idempotencyKey,
+    return this.completeCheckoutWithOrder({
+      campaign,
+      transaction,
       sessionId,
-      checkoutOutcome: "MERCHANT_ORDER_CREATED",
-      merchantOrderId: order.id,
-      occurredAt: this.now()
+      promotionPackage,
+      checkoutIdempotencyKey,
+      checkout,
+      order
     });
-    campaign = await this.transition(campaign, "ORDER_COMPLETED", "MERCHANT_ORDER_CREATED", "Merchant order exists and checkout was reported to Prava.", { transactionId: transaction.id, merchantOrderId: order.id });
-    return { campaign, transaction, order, checkout };
   }
   async activatePromotion(campaignId: string) {
     let campaign = await this.requireCampaign(campaignId);
@@ -481,10 +618,21 @@ export class CampaignService {
     const creative = await this.requireCreative(campaign.id);
     await this.reach.deliver(transaction.merchantOrderId, {
       approvedCreative: [creative.creative.headline, creative.creative.caption, creative.creative.offerText, creative.creative.callToAction].join("\n\n"),
-      campaignBrief: creative.creative.providerBrief
+      campaignBrief: creative.creative.providerBrief,
+      idempotencyKey: generateIdempotencyKey(
+        "reach-delivery",
+        campaign.id,
+        transaction.merchantOrderId
+      )
     });
     campaign = await this.transition(campaign, "ACTIVATING", "PROMOTION_ACTIVATION_STARTED", "Provider brief delivered and promotion activation started.", { merchantOrderId: transaction.merchantOrderId });
-    const activation = await this.reach.activate(transaction.merchantOrderId);
+    const activation = await this.reach.activate(transaction.merchantOrderId, {
+      idempotencyKey: generateIdempotencyKey(
+        "reach-activation",
+        campaign.id,
+        transaction.merchantOrderId
+      )
+    });
     await this.adapters.n8nStorage.saveRecord(activations, campaign.id, {
       campaignId: campaign.id,
       merchantOrderId: transaction.merchantOrderId,
@@ -604,16 +752,24 @@ export class CampaignService {
 
   private deterministicQualityIssues(campaign: Campaign, spot: Spot, option: CampaignOption, promotionPackage: PromotionPackage, provider: PromotionProvider, creative: CreativeRecord["creative"]): string[] {
     const issues: string[] = [];
-    const content = normalize([creative.headline, creative.caption, creative.offerText, creative.callToAction, creative.providerBrief].join(" "));
-    if (!spotNameMatches(spot.name, content)) issues.push("spot_name_missing");
-    if (!content.includes(normalize(weekdayName(campaign.slotStartAt)))) issues.push("campaign_date_missing");
+    const content = [creative.headline, creative.caption, creative.offerText, creative.callToAction, creative.providerBrief].join(" ");
+    const normalizedContent = normalizeFactText(content);
+    if (!spotNameMatches(spot.name, normalizedContent)) issues.push("spot_name_missing_or_inaccurate");
+    if (!normalizedContent.includes(normalizeFactText(weekdayName(campaign.slotStartAt, spot.timezone)))) issues.push("campaign_date_missing_or_inaccurate");
+    if (!containsLocalTimeRange(normalizedContent, campaign.slotStartAt, campaign.slotEndAt, spot.timezone)) issues.push("campaign_time_missing_or_inaccurate");
+    if (!containsPercentage(normalizedContent, promotionPackage.discountBps / 100)) issues.push("discount_missing_or_inaccurate");
+    if (!containsLabeledAmount(normalizedContent, "budget", campaign.maxBudgetPaise)) issues.push("budget_missing_or_inaccurate");
+    if (!containsLabeledText(normalizedContent, "provider", provider.name)) issues.push("provider_missing_or_inaccurate");
+    if (!containsLabeledText(normalizedContent, "package", promotionPackage.title)) issues.push("package_missing_or_inaccurate");
+    if (!containsLabeledAmount(normalizedContent, "expected cpa", option.expectedCpaPaise)) issues.push("expected_cpa_missing_or_inaccurate");
+    if (!containsLabeledDateTime(normalizedContent, "publication deadline", promotionPackage.bookingDeadlineAt, spot.timezone)) issues.push("deadline_missing_or_inaccurate");
     if (promotionPackage.discountBps > campaign.maxDiscountBps) issues.push("discount_exceeds_campaign_limit");
     if (option.totalCostPaise > campaign.maxBudgetPaise) issues.push("budget_exceeds_campaign_limit");
     if (!provider.isActive) issues.push("provider_inactive");
     if (promotionPackage.id !== option.packageId) issues.push("package_mismatch");
     if (option.expectedCpaPaise > campaign.maxExpectedCpaPaise) issues.push("expected_cpa_exceeds_campaign_limit");
     if (Date.parse(promotionPackage.bookingDeadlineAt) > Date.parse(campaign.slotStartAt)) issues.push("deadline_after_campaign_start");
-    if (creative.callToAction.trim() === "" || !content.includes(normalize(creative.callToAction))) issues.push("cta_missing");
+    if (creative.callToAction.trim() === "") issues.push("cta_missing");
     return issues;
   }
 
@@ -663,9 +819,258 @@ export class CampaignService {
     return record === null ? null : OwnerApprovalSchema.parse(record);
   }
 
+  private assertCampaignStatus(
+    campaign: Campaign,
+    expectedStatus: CampaignStatus,
+    operation: string
+  ): void {
+    if (campaign.status !== expectedStatus) {
+      throw new CampaignServiceError(
+        "INVALID_CAMPAIGN_STATUS",
+        `Campaign must be ${expectedStatus} to ${operation}.`,
+        409
+      );
+    }
+  }
+
+  private async saveTransactionState(
+    previous: ReturnType<typeof TransactionSchema.parse>,
+    next: ReturnType<typeof TransactionSchema.parse>,
+    eventType: string,
+    idempotencyKey: string,
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    await this.repository.saveTransaction(next);
+    await this.repository.appendAuditEvent(
+      AuditEventSchema.parse({
+        id: `audit_${randomUUID()}`,
+        entityType: "TRANSACTION",
+        entityId: next.id,
+        eventType,
+        actorType: "SYSTEM",
+        actorId: "campaign-service",
+        occurredAt: this.now(),
+        idempotencyKey,
+        previousState: previous.status,
+        nextState: next.status,
+        metadata: {
+          campaignId: next.campaignId,
+          ...metadata
+        }
+      })
+    );
+  }
+
+  private async reconcileMerchantOrder(idempotencyKey: string): Promise<MerchantOrder | null> {
+    const events = await this.repository.listAuditEvents({ entityType: "MERCHANT_ORDER" });
+    const checkoutEvent = events.findLast(
+      (event) =>
+        event.eventType === "REACH_CHECKOUT_COMPLETED" &&
+        event.idempotencyKey === idempotencyKey
+    );
+    const orderId = checkoutEvent?.metadata.orderId;
+
+    if (typeof orderId !== "string" || orderId.trim() === "") {
+      return null;
+    }
+
+    return this.repository.getMerchantOrder(orderId);
+  }
+
+  private reconciledCheckoutResult(
+    campaignId: string,
+    promotionPackage: PromotionPackage,
+    idempotencyKey: string,
+    order: MerchantOrder
+  ): ReachCheckoutResult {
+    return ReachCheckoutResultSchema.parse({
+      orderId: order.id,
+      externalMerchantOrderId: order.externalMerchantOrderId,
+      campaignId,
+      packageId: promotionPackage.id,
+      merchantId: promotionPackage.merchantId,
+      merchantName: reachMerchantName,
+      amountPaise: order.amountPaise,
+      currency: order.currency,
+      status: order.status,
+      idempotencyKey,
+      duplicate: true
+    });
+  }
+
+  private async completeCheckoutWithOrder(input: {
+    campaign: Campaign;
+    transaction: ReturnType<typeof TransactionSchema.parse>;
+    sessionId: string;
+    promotionPackage: PromotionPackage;
+    checkoutIdempotencyKey: string;
+    checkout: ReachCheckoutResult;
+    order: MerchantOrder;
+  }) {
+    await this.paymentAttemptGuard.markCompleted(input.campaign.id, input.sessionId);
+    const completedTransaction = TransactionSchema.parse({
+      ...input.transaction,
+      status: "COMPLETED",
+      pravaAuthorizationId: null,
+      merchantOrderId: input.order.id,
+      updatedAt: this.now()
+    });
+    await this.saveTransactionState(
+      input.transaction,
+      completedTransaction,
+      "MERCHANT_CHECKOUT_COMPLETED",
+      input.checkoutIdempotencyKey,
+      { merchantOrderId: input.order.id }
+    );
+    const completedCampaign = await this.transition(
+      input.campaign,
+      "ORDER_COMPLETED",
+      "MERCHANT_ORDER_CREATED",
+      "Merchant order exists and checkout completed.",
+      { transactionId: completedTransaction.id, merchantOrderId: input.order.id }
+    );
+    await this.reportPravaCheckoutOutcome({
+      campaignId: input.campaign.id,
+      transaction: completedTransaction,
+      sessionId: input.sessionId,
+      promotionPackage: input.promotionPackage,
+      checkoutOutcome: "MERCHANT_ORDER_CREATED",
+      merchantOrderId: input.order.id
+    });
+
+    return {
+      campaign: completedCampaign,
+      transaction: completedTransaction,
+      order: input.order,
+      checkout: input.checkout
+    };
+  }
+
+  private async failCheckout(input: {
+    campaign: Campaign;
+    transaction: ReturnType<typeof TransactionSchema.parse>;
+    sessionId: string;
+    promotionPackage: PromotionPackage;
+    checkoutIdempotencyKey: string;
+    error: unknown;
+  }): Promise<void> {
+    const failureReason = checkoutFailureReason(input.error);
+    await this.paymentAttemptGuard.markFailed(input.campaign.id, input.sessionId, failureReason);
+    const failedTransaction = TransactionSchema.parse({
+      ...input.transaction,
+      status: "FAILED",
+      pravaAuthorizationId: null,
+      updatedAt: this.now()
+    });
+    await this.saveTransactionState(
+      input.transaction,
+      failedTransaction,
+      "MERCHANT_CHECKOUT_FAILED",
+      input.checkoutIdempotencyKey,
+      { failureReason }
+    );
+    await this.transition(
+      input.campaign,
+      checkoutFailureCampaignStatus(input.error),
+      "MERCHANT_CHECKOUT_FAILED",
+      "Provider checkout failed without a merchant order.",
+      { transactionId: failedTransaction.id, failureReason }
+    );
+    await this.reportPravaCheckoutOutcome({
+      campaignId: input.campaign.id,
+      transaction: failedTransaction,
+      sessionId: input.sessionId,
+      promotionPackage: input.promotionPackage,
+      checkoutOutcome: "CHECKOUT_FAILED",
+      merchantOrderId: null,
+      failureReason
+    });
+  }
+
+  private async reportPravaCheckoutOutcome(input: {
+    campaignId: string;
+    transaction: ReturnType<typeof TransactionSchema.parse>;
+    sessionId: string;
+    promotionPackage: PromotionPackage;
+    checkoutOutcome: "MERCHANT_ORDER_CREATED" | "CHECKOUT_FAILED";
+    merchantOrderId: string | null;
+    failureReason?: string;
+  }): Promise<void> {
+    const idempotencyKey = generateIdempotencyKey(
+      "prava-checkout-outcome",
+      input.campaignId,
+      input.checkoutOutcome
+    );
+
+    try {
+      const result = await this.adapters.prava.reportCheckoutOutcome({
+        campaignId: input.campaignId,
+        merchantId: input.promotionPackage.merchantId,
+        packageId: input.promotionPackage.id,
+        merchantName: reachMerchantName,
+        packageName: input.promotionPackage.title,
+        amountPaise: input.transaction.amountPaise,
+        currency: "INR",
+        callbackUrl,
+        idempotencyKey,
+        sessionId: input.sessionId,
+        checkoutOutcome: input.checkoutOutcome,
+        merchantOrderId: input.merchantOrderId,
+        occurredAt: this.now(),
+        ...(input.failureReason ? { failureReason: input.failureReason } : {})
+      });
+      await this.repository.appendAuditEvent(
+        AuditEventSchema.parse({
+          id: `audit_${randomUUID()}`,
+          entityType: "TRANSACTION",
+          entityId: input.transaction.id,
+          eventType: "PRAVA_CHECKOUT_OUTCOME_REPORTED",
+          actorType: "PRAVA",
+          occurredAt: this.now(),
+          idempotencyKey,
+          previousState: input.transaction.status,
+          nextState: input.transaction.status,
+          metadata: {
+            campaignId: input.campaignId,
+            checkoutOutcome: input.checkoutOutcome,
+            merchantOrderId: input.merchantOrderId,
+            reportStatus: result.status
+          }
+        })
+      );
+    } catch {
+      await this.repository.appendAuditEvent(
+        AuditEventSchema.parse({
+          id: `audit_${randomUUID()}`,
+          entityType: "TRANSACTION",
+          entityId: input.transaction.id,
+          eventType: "PRAVA_CHECKOUT_OUTCOME_REPORT_FAILED",
+          actorType: "SYSTEM",
+          actorId: "campaign-service",
+          occurredAt: this.now(),
+          idempotencyKey,
+          previousState: input.transaction.status,
+          nextState: input.transaction.status,
+          metadata: {
+            campaignId: input.campaignId,
+            checkoutOutcome: input.checkoutOutcome,
+            merchantOrderId: input.merchantOrderId
+          }
+        })
+      );
+    }
+  }
   private async requireApproval(campaignId: string) {
     const approval = await this.getApproval(campaignId);
-    if (approval === null || approval.status !== "APPROVED") throw new CampaignServiceError("OWNER_APPROVAL_REQUIRED", "Owner approval is required.", 409);
+    if (approval === null) {
+      throw new CampaignServiceError("OWNER_APPROVAL_REQUIRED", "Owner approval is required.", 409);
+    }
+    if (approval.status === "EXPIRED" || Date.parse(approval.expiresAt) <= this.clock().getTime()) {
+      throw new CampaignServiceError("OWNER_APPROVAL_EXPIRED", "Owner approval has expired.", 409);
+    }
+    if (approval.status !== "APPROVED") {
+      throw new CampaignServiceError("OWNER_APPROVAL_REQUIRED", "Owner approval is required.", 409);
+    }
     return approval;
   }
 
@@ -709,22 +1114,11 @@ type CreativeRecord = {
 
 type PaymentSessionRecord = {
   campaignId: string;
-  session: {
-    sessionId: string;
-    campaignId: string;
-    status: string;
-    currency: "INR";
-    amountPaise: number;
-    checkoutUrl: string | null;
-    authorizationId: string | null;
-    expiresAt: string | null;
-    isFixture: boolean;
-  };
+  providerSessionId: string;
   idempotencyKey: string;
   transactionId: string;
   createdAt: string;
 };
-
 function parseCreative(record: Record<string, unknown>): CreativeRecord {
   const creative = record.creative as CreativeRecord["creative"] | undefined;
   const assetIds = record.assetIds;
@@ -742,27 +1136,89 @@ function parseCreative(record: Record<string, unknown>): CreativeRecord {
 }
 
 function parsePaymentSession(record: Record<string, unknown>): PaymentSessionRecord {
-  const session = record.session as PaymentSessionRecord["session"] | undefined;
-  if (!session) {
-    throw new CampaignServiceError("PAYMENT_SESSION_RECORD_INVALID", "Payment session record is invalid.", 500);
-  }
   return {
     campaignId: requiredString(record.campaignId, "campaignId"),
-    session,
+    providerSessionId: requiredString(record.providerSessionId, "providerSessionId"),
     idempotencyKey: requiredString(record.idempotencyKey, "idempotencyKey"),
     transactionId: requiredString(record.transactionId, "transactionId"),
     createdAt: requiredString(record.createdAt, "createdAt")
   };
 }
-
 function allChecks(value: boolean) {
   return { budget: value, deadline: value, price: value, merchant: value, discount: value, cpa: value };
 }
 
 function paymentFailureStatus(status: string): CampaignStatus {
-  if (status === "DECLINED") return "PAYMENT_DECLINED";
-  if (status === "EXPIRED") return "PRAVA_EXPIRED";
+  return status === "EXPIRED" ? "PRAVA_EXPIRED" : "PAYMENT_DECLINED";
+}
+
+function paymentTransactionFailureStatus(
+  status: string
+): "AWAITING_USER" | "DECLINED" | "EXPIRED" | "FAILED" {
+  if (status === "AWAITING_USER" || status === "DECLINED" || status === "EXPIRED") {
+    return status;
+  }
+  return "FAILED";
+}
+
+function checkoutAlreadyAttempted(campaignId: string): CampaignServiceError {
+  return new CampaignServiceError(
+    "CHECKOUT_ALREADY_ATTEMPTED",
+    `A Prava credential cannot be reused after checkout is attempted for campaign ${campaignId}.`,
+    409
+  );
+}
+
+function checkoutFailureCampaignStatus(error: unknown): CampaignStatus {
+  if (error instanceof ReachExchangeError && error.code === "PRICE_CHANGED") {
+    return "PRICE_CHANGED";
+  }
+  if (error instanceof ReachExchangeError && error.code === "PROVIDER_UNAVAILABLE") {
+    return "PROVIDER_UNAVAILABLE";
+  }
   return "CHECKOUT_FAILED";
+}
+
+function checkoutFailureReason(error: unknown): string {
+  if (isTimeoutError(error)) return "provider_timeout";
+  if (error instanceof ReachExchangeError && error.code === "PRICE_CHANGED") return "price_changed";
+  if (error instanceof ReachExchangeError && error.code === "PROVIDER_UNAVAILABLE") {
+    return "provider_unavailable";
+  }
+  if (error instanceof CampaignServiceError && error.code === "MERCHANT_ORDER_MISSING") {
+    return "merchant_order_missing";
+  }
+  return "provider_checkout_failed";
+}
+
+function safeCheckoutError(error: unknown): CampaignServiceError {
+  if (isTimeoutError(error)) {
+    return new CampaignServiceError(
+      "CHECKOUT_TIMEOUT",
+      "Provider checkout timed out and no merchant order was found.",
+      504
+    );
+  }
+  if (error instanceof ReachExchangeError && error.code === "PRICE_CHANGED") {
+    return new CampaignServiceError("PRICE_CHANGED", "Provider price changed before checkout.", 409);
+  }
+  if (error instanceof ReachExchangeError && error.code === "PROVIDER_UNAVAILABLE") {
+    return new CampaignServiceError("PROVIDER_UNAVAILABLE", "Provider is unavailable.", 409);
+  }
+  if (error instanceof CampaignServiceError && error.code === "MERCHANT_ORDER_MISSING") {
+    return error;
+  }
+  return new CampaignServiceError(
+    "CHECKOUT_FAILED",
+    "Provider checkout failed and no merchant order was found.",
+    502
+  );
+}
+
+function isTimeoutError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = "code" in error ? String(error.code) : "";
+  return error.name === "AbortError" || error.name === "TimeoutError" || code === "ETIMEDOUT";
 }
 
 function aiReviewIssues(review: OpenAIQualityReview): string[] {
@@ -783,8 +1239,73 @@ function spotNameMatches(spotName: string, normalizedContent: string): boolean {
   return tokens.length > 0 && tokens.every((token) => normalizedContent.includes(token));
 }
 
-function weekdayName(isoTimestamp: string): string {
-  return new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" }).format(new Date(isoTimestamp));
+function weekdayName(isoTimestamp: string, timeZone = "UTC"): string {
+  return new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone }).format(new Date(isoTimestamp));
+}
+
+function normalizeFactText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/,/g, "")
+    .replace(/[^a-z0-9%:-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function containsPercentage(content: string, percent: number): boolean {
+  return content.includes(`${percent}%`);
+}
+
+function containsLabeledText(content: string, label: string, value: string): boolean {
+  return content.includes(`${normalizeFactText(label)} ${normalizeFactText(value)}`);
+}
+
+function containsLabeledAmount(content: string, label: string, amountPaise: number): boolean {
+  const rupees = amountPaise / 100;
+  const normalizedLabel = normalizeFactText(label);
+  return [
+    `${normalizedLabel} inr ${rupees}`,
+    `${normalizedLabel} rs ${rupees}`,
+    `${normalizedLabel} ${rupees}`
+  ].some((candidate) => content.includes(candidate));
+}
+
+function containsLabeledDateTime(
+  content: string,
+  label: string,
+  isoTimestamp: string,
+  timeZone: string
+): boolean {
+  const weekday = normalizeFactText(weekdayName(isoTimestamp, timeZone));
+  const time = localTime(isoTimestamp, timeZone);
+  return content.includes(`${normalizeFactText(label)} ${weekday} ${time}`);
+}
+
+function containsLocalTimeRange(
+  content: string,
+  startTimestamp: string,
+  endTimestamp: string,
+  timeZone: string
+): boolean {
+  const start = localTime(startTimestamp, timeZone);
+  const end = localTime(endTimestamp, timeZone);
+  const [startValue, startPeriod] = start.split(" ");
+  const [endValue, endPeriod] = end.split(" ");
+  const variants = [`${start}-${end}`, `${startValue}-${end}`];
+  if (startPeriod === endPeriod) variants.push(`${startValue}-${endValue} ${endPeriod}`);
+  return variants.some((variant) => content.includes(variant));
+}
+
+function localTime(isoTimestamp: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone
+  })
+    .format(new Date(isoTimestamp))
+    .toLowerCase()
+    .replace(":00", "");
 }
 
 function normalize(value: string): string {

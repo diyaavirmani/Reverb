@@ -4,6 +4,8 @@
   CampaignIntent,
   DecisionExplanation,
   DecisionRejectedAlternative,
+  LinqSendMessageRequest,
+  LinqSendMessageResult,
   OpenAIQualityReview,
   PravaCreateSessionRequest,
   PravaCreateSessionResult,
@@ -16,6 +18,8 @@
   SensoCampaignContext,
   SensoProviderVerification
 } from "../../schemas";
+
+export type { LinqSendMessageRequest, LinqSendMessageResult };
 
 export type AdapterMode = "fixture" | "live";
 
@@ -66,17 +70,6 @@ export interface SensoAdapter {
     campaignContext: SensoCampaignContext
   ): Promise<SensoProviderVerification>;
 }
-
-export type LinqSendMessageRequest = {
-  campaignId: string;
-  recipient: string;
-  body: string;
-};
-
-export type LinqSendMessageResult = {
-  messageId: string;
-  accepted: boolean;
-};
 
 export interface LinqAdapter {
   readonly mode: AdapterMode;

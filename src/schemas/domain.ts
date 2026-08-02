@@ -310,7 +310,7 @@ export const TransactionSchema = z
     currency: z.literal("INR"),
     amountPaise: PaiseSchema,
     idempotencyKey: nonEmptyStringSchema,
-    pravaAuthorizationId: nonEmptyStringSchema.nullable(),
+    pravaAuthorizationId: z.null(),
     checkoutAttemptedAt: UtcDateTimeStringSchema.nullable(),
     merchantOrderId: nonEmptyStringSchema.nullable(),
     createdAt: UtcDateTimeStringSchema,

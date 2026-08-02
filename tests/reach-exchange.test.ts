@@ -1,4 +1,4 @@
-﻿import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -155,7 +155,9 @@ describe("Reverb Reach Exchange API", () => {
     const context = { params: { orderId: checkoutResult.orderId } };
 
     const earlyActivationResponse = await activateOrder(
-      new Request(`http://localhost/api/reach/orders/${checkoutResult.orderId}/activate`, { method: "POST" }),
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/activate`, {
+        idempotencyKey: "idem_reach_early_activation"
+      }),
       context
     );
     expect(earlyActivationResponse.status).toBe(409);
@@ -164,7 +166,8 @@ describe("Reverb Reach Exchange API", () => {
     const deliveryResponse = await deliverOrder(
       jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/deliver`, {
         approvedCreative: "Friday tables are open at The Quiet Cup.",
-        campaignBrief: "Promote the Friday 7-9 PM slot with 12 unused seats and a 15% max discount."
+        campaignBrief: "Promote the Friday 7-9 PM slot with 12 unused seats and a 15% max discount.",
+        idempotencyKey: "idem_reach_delivery_success"
       }),
       context
     );
@@ -180,7 +183,9 @@ describe("Reverb Reach Exchange API", () => {
     });
 
     const activationResponse = await activateOrder(
-      new Request(`http://localhost/api/reach/orders/${checkoutResult.orderId}/activate`, { method: "POST" }),
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/activate`, {
+        idempotencyKey: "idem_reach_activation_success"
+      }),
       context
     );
     const activation = ReachActivationResultSchema.parse(await activationResponse.json());
@@ -200,6 +205,169 @@ describe("Reverb Reach Exchange API", () => {
       delivered: true,
       activated: true,
       publicActivationUrl: activation.publicActivationUrl
+    });
+  });
+
+  it("returns the original delivery result for an identical idempotent retry", async () => {
+    const checkoutResponse = await checkout(
+      jsonRequest("/api/reach/checkout", {
+        ...checkoutRequest,
+        idempotencyKey: "idem_delivery_retry_checkout"
+      })
+    );
+    const checkoutResult = ReachCheckoutResultSchema.parse(await checkoutResponse.json());
+    const context = { params: { orderId: checkoutResult.orderId } };
+    const deliveryRequest = {
+      approvedCreative: "Identical approved creative.",
+      campaignBrief: "Identical campaign brief.",
+      idempotencyKey: "idem_reach_delivery_retry"
+    };
+
+    const firstResponse = await deliverOrder(
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/deliver`, deliveryRequest),
+      context
+    );
+    const first = ReachDeliveryResultSchema.parse(await firstResponse.json());
+    const retryResponse = await deliverOrder(
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/deliver`, deliveryRequest),
+      context
+    );
+    const retry = ReachDeliveryResultSchema.parse(await retryResponse.json());
+
+    expect(retryResponse.status).toBe(200);
+    expect(retry).toEqual(first);
+    const deliveryEvents = (
+      await repository.listAuditEvents({ entityType: "MERCHANT_ORDER", entityId: checkoutResult.orderId })
+    ).filter((event) => event.eventType === "REACH_ORDER_DELIVERED");
+    expect(deliveryEvents).toHaveLength(1);
+  });
+
+  it("rejects a delivery idempotency key reused with different payload", async () => {
+    const checkoutResponse = await checkout(
+      jsonRequest("/api/reach/checkout", {
+        ...checkoutRequest,
+        idempotencyKey: "idem_delivery_conflict_checkout"
+      })
+    );
+    const checkoutResult = ReachCheckoutResultSchema.parse(await checkoutResponse.json());
+    const context = { params: { orderId: checkoutResult.orderId } };
+    const idempotencyKey = "idem_reach_delivery_conflict";
+
+    await deliverOrder(
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/deliver`, {
+        approvedCreative: "Original creative.",
+        campaignBrief: "Original brief.",
+        idempotencyKey
+      }),
+      context
+    );
+    const conflictResponse = await deliverOrder(
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/deliver`, {
+        approvedCreative: "Changed creative.",
+        campaignBrief: "Original brief.",
+        idempotencyKey
+      }),
+      context
+    );
+
+    expect(conflictResponse.status).toBe(409);
+    await expect(conflictResponse.json()).resolves.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    const deliveryEvents = (
+      await repository.listAuditEvents({ entityType: "MERCHANT_ORDER", entityId: checkoutResult.orderId })
+    ).filter((event) => event.eventType === "REACH_ORDER_DELIVERED");
+    expect(deliveryEvents).toHaveLength(1);
+  });
+
+  it("returns the original activation result without another commercial state change", async () => {
+    const checkoutResponse = await checkout(
+      jsonRequest("/api/reach/checkout", {
+        ...checkoutRequest,
+        idempotencyKey: "idem_activation_retry_checkout"
+      })
+    );
+    const checkoutResult = ReachCheckoutResultSchema.parse(await checkoutResponse.json());
+    const context = { params: { orderId: checkoutResult.orderId } };
+    await deliverOrder(
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/deliver`, {
+        approvedCreative: "Activation retry creative.",
+        campaignBrief: "Activation retry brief.",
+        idempotencyKey: "idem_activation_retry_delivery"
+      }),
+      context
+    );
+    const activationRequest = { idempotencyKey: "idem_reach_activation_retry" };
+
+    const firstResponse = await activateOrder(
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/activate`, activationRequest),
+      context
+    );
+    const first = ReachActivationResultSchema.parse(await firstResponse.json());
+    const retryResponse = await activateOrder(
+      jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/activate`, activationRequest),
+      context
+    );
+    const retry = ReachActivationResultSchema.parse(await retryResponse.json());
+
+    expect(retryResponse.status).toBe(200);
+    expect(retry).toEqual(first);
+    const activationEvents = (
+      await repository.listAuditEvents({ entityType: "MERCHANT_ORDER", entityId: checkoutResult.orderId })
+    ).filter((event) => event.eventType === "REACH_ORDER_ACTIVATED");
+    expect(activationEvents).toHaveLength(1);
+  });
+
+  it("rejects an activation idempotency key reused for a different order", async () => {
+    const firstCheckoutResponse = await checkout(
+      jsonRequest("/api/reach/checkout", {
+        ...checkoutRequest,
+        idempotencyKey: "idem_activation_conflict_checkout_one"
+      })
+    );
+    const secondCheckoutResponse = await checkout(
+      jsonRequest("/api/reach/checkout", {
+        ...checkoutRequest,
+        idempotencyKey: "idem_activation_conflict_checkout_two"
+      })
+    );
+    const firstOrder = ReachCheckoutResultSchema.parse(await firstCheckoutResponse.json());
+    const secondOrder = ReachCheckoutResultSchema.parse(await secondCheckoutResponse.json());
+    const firstContext = { params: { orderId: firstOrder.orderId } };
+    const secondContext = { params: { orderId: secondOrder.orderId } };
+
+    await deliverOrder(
+      jsonRequest(`/api/reach/orders/${firstOrder.orderId}/deliver`, {
+        approvedCreative: "First order creative.",
+        campaignBrief: "First order brief.",
+        idempotencyKey: "idem_activation_conflict_delivery_one"
+      }),
+      firstContext
+    );
+    await deliverOrder(
+      jsonRequest(`/api/reach/orders/${secondOrder.orderId}/deliver`, {
+        approvedCreative: "Second order creative.",
+        campaignBrief: "Second order brief.",
+        idempotencyKey: "idem_activation_conflict_delivery_two"
+      }),
+      secondContext
+    );
+    const reusedKey = "idem_reach_activation_conflict";
+    await activateOrder(
+      jsonRequest(`/api/reach/orders/${firstOrder.orderId}/activate`, {
+        idempotencyKey: reusedKey
+      }),
+      firstContext
+    );
+    const conflictResponse = await activateOrder(
+      jsonRequest(`/api/reach/orders/${secondOrder.orderId}/activate`, {
+        idempotencyKey: reusedKey
+      }),
+      secondContext
+    );
+
+    expect(conflictResponse.status).toBe(409);
+    await expect(conflictResponse.json()).resolves.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    await expect(repository.getMerchantOrder(secondOrder.orderId)).resolves.toMatchObject({
+      status: "BRIEF_DELIVERED"
     });
   });
 });

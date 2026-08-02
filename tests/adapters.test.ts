@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   IntegrationError,
@@ -10,32 +10,42 @@ import { CampaignIntentSchema } from "../src/schemas";
 
 const completeLiveEnv = {
   USE_FIXTURES: "false",
+  APP_URL: "https://reverb.example.test",
+  APP_ENV: "production",
+  APP_SECRET: "test-app-secret-value",
+  N8N_INTERNAL_SECRET: "test-n8n-internal-secret",
   OPENAI_API_KEY: "test-openai-api-key",
-  OPENAI_INTENT_MODEL: "model-intent",
-  OPENAI_DECISION_MODEL: "model-decision",
-  OPENAI_CREATIVE_MODEL: "model-creative",
-  OPENAI_QUALITY_REVIEW_MODEL: "model-quality-review",
-  SENSO_API_BASE_URL: "https://senso.example.test",
+  OPENAI_MODEL: "model-main",
+  OPENAI_IMAGE_MODEL: "model-image",
   SENSO_API_KEY: "test-senso-api-key",
-  SENSO_VERIFY_PROVIDER_URL: "https://senso.example.test/verify-provider",
-  LINQ_API_BASE_URL: "https://linq.example.test",
+  SENSO_API_BASE: "https://senso.example.test/api",
+  SENSO_PROVIDER_FOLDER_ID: "folder-provider-evidence",
   LINQ_API_KEY: "test-linq-api-key",
-  PRAVA_API_BASE_URL: "https://prava.example.test",
-  PRAVA_API_KEY: "test-prava-api-key",
-  PRAVA_CREATE_SESSION_ENDPOINT_TEMPLATE: "/sessions",
-  PRAVA_RESULT_ENDPOINT_TEMPLATE: "/sessions/{sessionId}",
-  PRAVA_REPORT_CHECKOUT_ENDPOINT_TEMPLATE: "/sessions/{sessionId}/checkout-outcome",
-  N8N_API_BASE_URL: "https://n8n.example.test",
-  N8N_API_KEY: "test-n8n-api-key"
+  LINQ_API_BASE: "https://linq.example.test/api",
+  LINQ_FROM_NUMBER: "+919900000000",
+  LINQ_WEBHOOK_URL: "https://reverb.example.test/api/webhooks/linq",
+  LINQ_WEBHOOK_SECRET: "test-linq-webhook-secret",
+  NEXT_PUBLIC_PRAVA_PUBLISHABLE_KEY: "pk_test_placeholder",
+  PRAVA_SECRET_KEY: "sk_test_placeholder",
+  PRAVA_API_BASE: "https://prava.example.test",
+  PRAVA_INTEGRATION_TYPE: "embedding",
+  PRAVA_CURRENCY: "INR",
+  N8N_BASE_URL: "https://n8n.example.test",
+  N8N_INTAKE_WEBHOOK_URL: "https://n8n.example.test/webhook/intake",
+  N8N_STORAGE_WEBHOOK_URL: "https://n8n.example.test/webhook/storage",
+  N8N_CAMPAIGN_WEBHOOK_URL: "https://n8n.example.test/webhook/campaign",
+  N8N_REPORT_WEBHOOK_URL: "https://n8n.example.test/webhook/report",
+  DEMO_SPOT_ID: "spot_quiet_cup_cafe",
+  DEMO_OWNER_EMAIL: "owner@example.test",
+  DEMO_TIMEZONE: "Asia/Kolkata"
 };
 
 const openAIModels = {
-  intent: "model-intent",
-  decision: "model-decision",
-  creative: "model-creative",
-  qualityReview: "model-quality-review"
+  intent: "model-main",
+  decision: "model-main",
+  creative: "model-main",
+  qualityReview: "model-main"
 };
-
 const validIntent = CampaignIntentSchema.parse({
   unusedCapacity: 12,
   targetReservations: 6,
@@ -48,6 +58,16 @@ const validIntent = CampaignIntentSchema.parse({
 });
 
 describe("runtime configuration", () => {
+  it("loads fixture mode with minimal variables", () => {
+    expect(loadRuntimeConfig({ USE_FIXTURES: "true" })).toEqual({
+      useFixtures: true,
+      mode: "fixture"
+    });
+
+    const adapters = createIntegrationAdapters(loadRuntimeConfig({ USE_FIXTURES: "true" }));
+    expect(Object.values(adapters).every((adapter) => adapter.mode === "fixture")).toBe(true);
+  });
+
   it("defaults to fixture mode", () => {
     expect(loadRuntimeConfig({})).toEqual({
       useFixtures: true,
@@ -55,89 +75,7 @@ describe("runtime configuration", () => {
     });
   });
 
-  it("chooses fixture adapters when fixture mode is enabled", () => {
-    const adapters = createIntegrationAdapters(loadRuntimeConfig({ USE_FIXTURES: "true" }));
-
-    expect(adapters.openai.mode).toBe("fixture");
-    expect(adapters.senso.mode).toBe("fixture");
-    expect(adapters.linq.mode).toBe("fixture");
-    expect(adapters.prava.mode).toBe("fixture");
-    expect(adapters.n8nStorage.mode).toBe("fixture");
-  });
-
-  it("fails clearly when live mode lacks required configuration", () => {
-    expect(() =>
-      loadRuntimeConfig({
-        USE_FIXTURES: "false",
-        OPENAI_API_KEY: "test-openai-api-key"
-      })
-    ).toThrow(IntegrationError);
-
-    try {
-      loadRuntimeConfig({
-        USE_FIXTURES: "false",
-        OPENAI_API_KEY: "test-openai-api-key"
-      });
-    } catch (error) {
-      expect(error).toBeInstanceOf(IntegrationError);
-      expect((error as IntegrationError).safeMessage).toContain(
-        "Live mode missing required configuration"
-      );
-      expect((error as IntegrationError).safeMessage).toContain("OPENAI_INTENT_MODEL");
-      expect((error as IntegrationError).safeMessage).toContain("SENSO_API_BASE_URL");
-      expect((error as IntegrationError).safeMessage).toContain("SENSO_VERIFY_PROVIDER_URL");
-      expect((error as IntegrationError).safeMessage).not.toContain("test-openai-api-key");
-    }
-  });
-
-  it("fails clearly when live mode lacks Senso endpoint configuration", () => {
-    const { SENSO_VERIFY_PROVIDER_URL: _sensoEndpoint, ...envWithoutSensoEndpoint } = completeLiveEnv;
-
-    expect(() => loadRuntimeConfig(envWithoutSensoEndpoint)).toThrow(IntegrationError);
-
-    try {
-      loadRuntimeConfig(envWithoutSensoEndpoint);
-    } catch (error) {
-      expect(error).toBeInstanceOf(IntegrationError);
-      expect((error as IntegrationError).safeMessage).toContain("SENSO_VERIFY_PROVIDER_URL");
-      expect((error as IntegrationError).safeMessage).not.toContain("test-senso-api-key");
-    }
-  });
-
-  it("does not require a live Linq API key yet", () => {
-    const { LINQ_API_KEY: _linqApiKey, ...envWithoutLinqKey } = completeLiveEnv;
-    const config = loadRuntimeConfig(envWithoutLinqKey);
-
-    if (config.mode !== "live") {
-      throw new Error("Expected live config");
-    }
-
-    expect(config.integrations.linq.apiKey).toBeUndefined();
-  });
-
-  it("fails clearly when live mode lacks Prava endpoint templates", () => {
-    const {
-      PRAVA_CREATE_SESSION_ENDPOINT_TEMPLATE: _createEndpoint,
-      PRAVA_RESULT_ENDPOINT_TEMPLATE: _resultEndpoint,
-      PRAVA_REPORT_CHECKOUT_ENDPOINT_TEMPLATE: _reportEndpoint,
-      ...envWithoutPravaEndpoints
-    } = completeLiveEnv;
-
-    expect(() => loadRuntimeConfig(envWithoutPravaEndpoints)).toThrow(IntegrationError);
-
-    try {
-      loadRuntimeConfig(envWithoutPravaEndpoints);
-    } catch (error) {
-      expect(error).toBeInstanceOf(IntegrationError);
-      expect((error as IntegrationError).safeMessage).toContain(
-        "PRAVA_CREATE_SESSION_ENDPOINT_TEMPLATE"
-      );
-      expect((error as IntegrationError).safeMessage).toContain("PRAVA_RESULT_ENDPOINT_TEMPLATE");
-      expect((error as IntegrationError).safeMessage).not.toContain("test-prava-api-key");
-    }
-  });
-
-  it("chooses live adapters only when all live variables are present", () => {
+  it("loads complete live mode from the final variable contract", () => {
     const config = loadRuntimeConfig(completeLiveEnv);
     const adapters = createIntegrationAdapters(config);
 
@@ -145,29 +83,69 @@ describe("runtime configuration", () => {
       throw new Error("Expected live config");
     }
 
-    expect(config.integrations.openai.models).toEqual(openAIModels);
-    expect(adapters.openai.mode).toBe("live");
-    expect(adapters.senso.mode).toBe("live");
-    expect(adapters.linq.mode).toBe("live");
-    expect(adapters.prava.mode).toBe("live");
-    expect(adapters.n8nStorage.mode).toBe("live");
+    expect(config.runtime).toMatchObject({
+      appUrl: completeLiveEnv.APP_URL,
+      appEnv: completeLiveEnv.APP_ENV
+    });
+    expect(config.integrations.openai).toMatchObject({
+      imageModel: completeLiveEnv.OPENAI_IMAGE_MODEL,
+      models: openAIModels
+    });
+    expect(config.integrations.senso.providerFolderId).toBe(
+      completeLiveEnv.SENSO_PROVIDER_FOLDER_ID
+    );
+    expect(config.integrations.linq).toMatchObject({
+      fromNumber: completeLiveEnv.LINQ_FROM_NUMBER,
+      webhookUrl: completeLiveEnv.LINQ_WEBHOOK_URL
+    });
+    expect(config.integrations.prava).toMatchObject({
+      publishableKey: completeLiveEnv.NEXT_PUBLIC_PRAVA_PUBLISHABLE_KEY,
+      integrationType: completeLiveEnv.PRAVA_INTEGRATION_TYPE,
+      currency: "INR"
+    });
+    expect(config.n8n.storageWebhookUrl).toBe(completeLiveEnv.N8N_STORAGE_WEBHOOK_URL);
+    expect(config.demo.timezone).toBe(completeLiveEnv.DEMO_TIMEZONE);
+    expect(Object.values(adapters).every((adapter) => adapter.mode === "live")).toBe(true);
   });
 
-  it("rejects invalid live URLs without printing secret values", () => {
+  it("reports every missing required live variable by name", () => {
+    expect(() => loadRuntimeConfig({ USE_FIXTURES: "false" })).toThrow(IntegrationError);
+
+    try {
+      loadRuntimeConfig({ USE_FIXTURES: "false" });
+    } catch (error) {
+      expect(error).toBeInstanceOf(IntegrationError);
+      const configError = error as IntegrationError;
+      expect(configError.safeMessage).toContain("Live mode missing required configuration");
+      expect(configError.safeMessage).toContain("APP_URL");
+      expect(configError.safeMessage).toContain("OPENAI_MODEL");
+      expect(configError.safeMessage).toContain("SENSO_API_BASE");
+      expect(configError.safeMessage).toContain("LINQ_FROM_NUMBER");
+      expect(configError.safeMessage).toContain("PRAVA_SECRET_KEY");
+      expect(configError.safeMessage).toContain("N8N_REPORT_WEBHOOK_URL");
+      expect(configError.safeMessage).toContain("DEMO_TIMEZONE");
+    }
+  });
+
+  it("never includes secret values in configuration errors", () => {
     try {
       loadRuntimeConfig({
         ...completeLiveEnv,
-        SENSO_API_BASE_URL: "not-a-url"
+        SENSO_API_BASE: "not-a-url"
       });
+      throw new Error("Expected runtime configuration to fail");
     } catch (error) {
       expect(error).toBeInstanceOf(IntegrationError);
       expect((error as IntegrationError).safeMessage).toBe("Runtime configuration is invalid.");
-      expect(JSON.stringify(error)).not.toContain("test-openai-api-key");
-      expect(JSON.stringify(error)).not.toContain("test-senso-api-key");
+      const serialized = JSON.stringify(error);
+      expect(serialized).not.toContain(completeLiveEnv.APP_SECRET);
+      expect(serialized).not.toContain(completeLiveEnv.OPENAI_API_KEY);
+      expect(serialized).not.toContain(completeLiveEnv.LINQ_WEBHOOK_SECRET);
+      expect(serialized).not.toContain(completeLiveEnv.PRAVA_SECRET_KEY);
+      expect(serialized).not.toContain(completeLiveEnv.N8N_INTERNAL_SECRET);
     }
   });
 });
-
 describe("OpenAI adapters", () => {
   it("returns validated fixture responses", async () => {
     const adapter = createIntegrationAdapters(loadRuntimeConfig({ USE_FIXTURES: "true" })).openai;
@@ -230,7 +208,7 @@ describe("OpenAI adapters", () => {
     expect(parse).toHaveBeenCalledTimes(1);
     expect(parse).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "model-intent",
+        model: "model-main",
         text: expect.objectContaining({
           format: expect.any(Object)
         })

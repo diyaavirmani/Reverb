@@ -7,14 +7,78 @@ import { FixtureLinqAdapter, FixtureN8nStorageAdapter, FixtureOpenAIAdapter, Fix
 import { CampaignService } from "../src/lib/core/campaign-service";
 import { LocalFixtureRepository } from "../src/lib/repositories";
 import type { IntegrationAdapters } from "../src/lib/adapters";
+import type { CampaignCreative } from "../src/schemas";
 
 const fixtureSourceDir = join(process.cwd(), "fixtures", "data");
 const fixedNow = "2026-08-01T00:00:00.000Z";
 
+const deterministicQualityCases: Array<{
+  name: string;
+  expectedIssue: string;
+  mutate: (creative: CampaignCreative) => CampaignCreative;
+}> = [
+  {
+    name: "rejects an inaccurate Spot name",
+    expectedIssue: "spot_name_missing_or_inaccurate",
+    mutate: (creative) => replaceCreative(creative, /(the )?quiet cup( cafe)?/gi, "Different Spot")
+  },
+  {
+    name: "rejects an inaccurate campaign date",
+    expectedIssue: "campaign_date_missing_or_inaccurate",
+    mutate: (creative) => replaceCreative(creative, /friday/gi, "Thursday")
+  },
+  {
+    name: "rejects an inaccurate campaign time",
+    expectedIssue: "campaign_time_missing_or_inaccurate",
+    mutate: (creative) => replaceCreative(creative, /7-9 PM/g, "6-8 PM")
+  },
+  {
+    name: "rejects an inaccurate discount",
+    expectedIssue: "discount_missing_or_inaccurate",
+    mutate: (creative) => replaceCreative(creative, /15%/g, "25%")
+  },
+  {
+    name: "rejects an inaccurate budget",
+    expectedIssue: "budget_missing_or_inaccurate",
+    mutate: (creative) => replaceCreative(creative, /5,000/g, "6,000")
+  },
+  {
+    name: "rejects an inaccurate provider",
+    expectedIssue: "provider_missing_or_inaccurate",
+    mutate: (creative) =>
+      replaceCreative(
+        creative,
+        /Provider Reach Exchange Local Dining Boost/g,
+        "Provider Different Distribution Partner"
+      )
+  },
+  {
+    name: "rejects an inaccurate package",
+    expectedIssue: "package_missing_or_inaccurate",
+    mutate: (creative) =>
+      replaceCreative(creative, /package Local Dining Boost/g, "package Different Package")
+  },
+  {
+    name: "rejects an inaccurate expected CPA",
+    expectedIssue: "expected_cpa_missing_or_inaccurate",
+    mutate: (creative) => replaceCreative(creative, /expected CPA INR 800/g, "expected CPA INR 900")
+  },
+  {
+    name: "rejects an inaccurate publication deadline",
+    expectedIssue: "deadline_missing_or_inaccurate",
+    mutate: (creative) => replaceCreative(creative, /publication deadline Friday 6:30 PM/g, "publication deadline Friday 7:30 PM")
+  },
+  {
+    name: "rejects a missing CTA",
+    expectedIssue: "cta_missing",
+    mutate: (creative) => ({ ...creative, callToAction: "" })
+  }
+];
 describe("CampaignService", () => {
   let temporaryRoot: string;
   let dataDir: string;
   let repository: LocalFixtureRepository;
+  let n8nStorage: FixtureN8nStorageAdapter;
   let service: CampaignService;
 
   beforeEach(async () => {
@@ -22,12 +86,13 @@ describe("CampaignService", () => {
     dataDir = join(temporaryRoot, "data");
     await cp(fixtureSourceDir, dataDir, { recursive: true });
     repository = new LocalFixtureRepository(dataDir);
+    n8nStorage = new FixtureN8nStorageAdapter();
     const adapters: IntegrationAdapters = {
       openai: new FixtureOpenAIAdapter(),
       senso: new FixtureSensoAdapter(),
       linq: new FixtureLinqAdapter(),
       prava: new FixturePravaAdapter(),
-      n8nStorage: new FixtureN8nStorageAdapter()
+      n8nStorage
     };
     service = new CampaignService(repository, adapters, () => new Date(fixedNow));
   });
@@ -114,4 +179,46 @@ describe("CampaignService", () => {
       ])
     );
   });
+  it.each(deterministicQualityCases)("$name", async ({ expectedIssue, mutate }) => {
+    const campaignId = await prepareGeneratedCampaign();
+    const storedCreative = await n8nStorage.getRecord("campaign-creatives", campaignId);
+    if (storedCreative === null) throw new Error("Generated creative fixture was not found.");
+    const creative = storedCreative.creative as CampaignCreative;
+    await n8nStorage.saveRecord("campaign-creatives", campaignId, {
+      ...storedCreative,
+      creative: mutate(creative)
+    });
+
+    const quality = await service.runQualityChecks(campaignId);
+
+    expect(quality.deterministicIssues).toContain(expectedIssue);
+    expect(quality.review.status).toBe("NEEDS_REVISION");
+    expect(quality.campaign.status).toBe("REJECTED_BY_POLICY");
+  });
+
+  async function prepareGeneratedCampaign(): Promise<string> {
+    const campaign = await service.createCampaignFromIntent({
+      spotId: "spot_quiet_cup_cafe",
+      requestedByOwnerId: "owner_quality_negative",
+      ownerMessage: "Fill Friday 7-9 PM with 12 unused seats, target 6 reservations, budget Rs 5,000."
+    });
+    await service.discoverOptions(campaign.id);
+    await service.selectOption(campaign.id);
+    await service.generateCreative(campaign.id);
+    return campaign.id;
+  }
 });
+function replaceCreative(
+  creative: CampaignCreative,
+  search: string | RegExp,
+  replacement: string
+): CampaignCreative {
+  return {
+    headline: creative.headline.replace(search, replacement),
+    caption: creative.caption.replace(search, replacement),
+    offerText: creative.offerText.replace(search, replacement),
+    callToAction: creative.callToAction.replace(search, replacement),
+    providerBrief: creative.providerBrief.replace(search, replacement),
+    imagePrompt: creative.imagePrompt.replace(search, replacement)
+  };
+}

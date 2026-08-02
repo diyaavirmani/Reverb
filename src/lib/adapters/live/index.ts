@@ -6,6 +6,8 @@ import {
   CampaignCreativeSchema,
   CampaignIntentSchema,
   DecisionExplanationSchema,
+  LinqSendMessageRequestSchema,
+  LinqSendMessageResultSchema,
   OpenAIQualityReviewSchema,
   PravaCreateSessionRequestSchema,
   PravaCreateSessionResultSchema,
@@ -56,6 +58,10 @@ export type LiveSensoAdapterConfig = LiveCredentialAdapterConfig & {
   verifyProviderUrl: string;
 };
 
+export type LiveLinqAdapterConfig = LiveCredentialAdapterConfig & {
+  sendMessageUrl: string;
+};
+
 export type LivePravaAdapterConfig = LiveCredentialAdapterConfig & {
   createSessionEndpointTemplate: string;
   resultEndpointTemplate: string;
@@ -63,6 +69,7 @@ export type LivePravaAdapterConfig = LiveCredentialAdapterConfig & {
 };
 
 export type SensoHttpClient = (input: string, init: RequestInit) => Promise<Response>;
+export type LinqHttpClient = (input: string, init: RequestInit) => Promise<Response>;
 export type PravaHttpClient = (input: string, init: RequestInit) => Promise<Response>;
 
 type StructuredRequest<T> = {
@@ -230,10 +237,50 @@ export class LiveSensoAdapter implements SensoAdapter {
 export class LiveLinqAdapter implements LinqAdapter {
   readonly mode = "live";
 
-  constructor(private readonly config: LiveAdapterConfig) {}
+  constructor(
+    private readonly config: LiveLinqAdapterConfig,
+    private readonly httpClient: LinqHttpClient = fetch
+  ) {}
 
-  async sendMessage(): ReturnType<LinqAdapter["sendMessage"]> {
-    throw liveNotImplemented("linq", "sendMessage", this.config);
+  async sendMessage(
+    request: Parameters<LinqAdapter["sendMessage"]>[0]
+  ): ReturnType<LinqAdapter["sendMessage"]> {
+    const parsedRequest = LinqSendMessageRequestSchema.parse(request);
+
+    try {
+      const response = await this.httpClient(this.config.sendMessageUrl, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${this.config.apiKey}`,
+          "content-type": "application/json",
+          "idempotency-key": parsedRequest.idempotencyKey
+        },
+        body: JSON.stringify(parsedRequest)
+      });
+
+      if (!response.ok) {
+        throw new IntegrationError({
+          integration: "linq",
+          operation: "sendMessage",
+          safeMessage: "Linq message request failed.",
+          statusCode: response.status,
+          retryable: response.status === 429 || response.status >= 500,
+          cause: {
+            status: response.status,
+            statusText: response.statusText,
+            sendMessageUrl: this.config.sendMessageUrl
+          }
+        });
+      }
+
+      return normalizeLinqSendResult(await response.json(), parsedRequest.idempotencyKey);
+    } catch (error) {
+      if (error instanceof IntegrationError) {
+        throw error;
+      }
+
+      throw toLinqIntegrationError(error);
+    }
   }
 }
 
@@ -388,6 +435,32 @@ function toSensoIntegrationError(error: unknown): IntegrationError {
   });
 }
 
+function toLinqIntegrationError(error: unknown): IntegrationError {
+  const statusCode = getStatusCode(error);
+
+  return new IntegrationError({
+    integration: "linq",
+    operation: "sendMessage",
+    safeMessage:
+      error instanceof z.ZodError
+        ? "Linq response failed schema validation."
+        : "Linq message request failed.",
+    statusCode,
+    retryable: statusCode === 429 || (statusCode !== undefined && statusCode >= 500),
+    cause: error
+  });
+}
+
+function normalizeLinqSendResult(raw: unknown, idempotencyKey: string) {
+  const record = safeRecord(raw);
+
+  return LinqSendMessageResultSchema.parse({
+    messageId: asString(record.messageId) ?? asString(record.id),
+    accepted: record.accepted,
+    idempotencyKey,
+    isFixture: false
+  });
+}
 function toPravaIntegrationError(operation: string, error: unknown): IntegrationError {
   const statusCode = getStatusCode(error);
 

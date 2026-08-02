@@ -61,10 +61,6 @@ export class InMemoryPaymentAttemptGuard implements PaymentAttemptGuard {
       return { ...state };
     }
 
-    if (existingState.sessionId === sessionId && existingState.status === "ACQUIRED") {
-      return { ...existingState };
-    }
-
     if (existingState.status === "ACQUIRED") {
       throw new Error(`Payment attempt already acquired for campaign: ${campaignId}`);
     }

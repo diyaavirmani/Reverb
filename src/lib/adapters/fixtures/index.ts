@@ -1,4 +1,5 @@
-﻿import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { z, type ZodType } from "zod";
@@ -7,6 +8,8 @@ import {
   CampaignCreativeSchema,
   CampaignIntentSchema,
   DecisionExplanationSchema,
+  LinqSendMessageRequestSchema,
+  LinqSendMessageResultSchema,
   OpenAIQualityReviewSchema,
   PravaCreateSessionResultSchema,
   PravaPaymentResultSchema,
@@ -22,6 +25,7 @@ import {
   type PravaReportCheckoutOutcomeResult,
   type SensoProviderVerification
 } from "../../../schemas";
+import { hashPayload } from "../../security/signatures";
 import { IntegrationError } from "../errors";
 import type {
   LinqAdapter,
@@ -143,11 +147,37 @@ export class FixtureSensoAdapter implements SensoAdapter {
 export class FixtureLinqAdapter implements LinqAdapter {
   readonly mode = "fixture";
 
-  async sendMessage(request: Parameters<LinqAdapter["sendMessage"]>[0]) {
-    return {
-      messageId: `fixture_linq_${request.campaignId}`,
-      accepted: true
-    };
+  constructor(private readonly fixtureDirectory = join(process.cwd(), "fixtures", "linq")) {}
+
+  async sendMessage(
+    request: Parameters<LinqAdapter["sendMessage"]>[0]
+  ): ReturnType<LinqAdapter["sendMessage"]> {
+    const parsedRequest = LinqSendMessageRequestSchema.parse(request);
+
+    try {
+      const raw = await readFile(join(this.fixtureDirectory, "send-message-result.json"), "utf8");
+      const fixture = LinqSendMessageResultSchema.parse(
+        JSON.parse(stripByteOrderMark(raw))
+      );
+
+      return LinqSendMessageResultSchema.parse({
+        ...fixture,
+        messageId: `${fixture.messageId}_${hashPayload(parsedRequest.idempotencyKey).slice(0, 12)}`,
+        idempotencyKey: parsedRequest.idempotencyKey,
+        isFixture: true
+      });
+    } catch (error) {
+      throw new IntegrationError({
+        integration: "linq",
+        operation: "sendMessage",
+        safeMessage:
+          error instanceof z.ZodError
+            ? "Linq fixture failed schema validation."
+            : "Linq fixture could not be loaded.",
+        retryable: false,
+        cause: error
+      });
+    }
   }
 }
 
@@ -166,6 +196,8 @@ export class FixturePravaAdapter implements PravaAdapter {
       campaignId: request.campaignId,
       amountPaise: request.amountPaise,
       currency: request.currency,
+      checkoutUrl: `https://prava.example.test/fixtures/checkout/${hashPayload(request.idempotencyKey).slice(0, 24)}`,
+      authorizationId: null,
       isFixture: true
     });
   }
@@ -196,6 +228,7 @@ export class FixturePravaAdapter implements PravaAdapter {
     return PravaPaymentResultSchema.parse({
       ...fixture,
       campaignId: request.campaignId,
+      authorizationId: fixture.status === "AUTHORIZED" ? `fixture_ephemeral_${randomUUID()}` : null,
       isFixture: true
     });
   }
