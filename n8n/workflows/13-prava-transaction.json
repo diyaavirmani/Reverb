@@ -1,0 +1,2682 @@
+{
+  "name": "Reverb Fill - Prava Transaction",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/prava-transaction",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000001",
+      "name": "Receive Owner Approval",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1800,
+        0
+      ],
+      "webhookId": "13000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nfor (const field of ['campaignId','approvedProviderId','approvedPackageId']) if (typeof input[field] !== 'string' || input[field].trim() === '') throw new Error(field + ' is required');\nif (input.ownerApproval !== true) throw new Error('Explicit ownerApproval=true is required');\nif (!Number.isSafeInteger(input.approvedAmountPaise) || input.approvedAmountPaise < 0) throw new Error('approvedAmountPaise must be integer paise');\nreturn [{ json: { ...input, requestId: typeof input.requestId === 'string' ? input.requestId : 'transaction:' + input.campaignId } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000002",
+      "name": "Validate Approved Transaction Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, event_type: 'PRAVA_TERMINAL_STATUS', description: 'Prava reached a non-checkout terminal or bounded-pending state.', metadata: { nextState: $('Prepare Terminal Prava Status').item.json.storage_body.data.status, checkoutAttempted: false } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000095",
+      "name": "Audit Terminal Prava Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4710, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_CHECK_PROCESSED_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { event_id: $json.requestId, event_type: 'owner.approval', source: 'prava-transaction', result_json: { campaignId: $json.campaignId } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000003",
+      "name": "Check Duplicate Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, event_type: 'PAYMENT_AUTHORIZED', description: 'Prava authorised one checkout attempt.', metadata: { previousState: 'PRAVA_PENDING', nextState: 'PAYMENT_AUTHORIZED' } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000096",
+      "name": "Audit Payment Authorized",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4910, -300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "13000000-0000-4000-8000-000000000704",
+              "leftValue": "={{ $json.is_duplicate === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000004",
+      "name": "Duplicate Callback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, event_type: 'CHECKOUT_FAILED', description: 'Provider checkout failed and reconciliation found no merchant order.', metadata: { nextState: 'CHECKOUT_FAILED', merchantOrderExists: false } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000097",
+      "name": "Audit Checkout Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [8210, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, duplicate: true, status: 'DUPLICATE_CALLBACK', campaignId: $('Validate Approved Transaction Input').item.json.campaignId } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000005",
+      "name": "Duplicate Callback Branch",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_campaign', request_id: 'payment:campaign:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { id: $('Validate Approved Transaction Input').item.json.campaignId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000006",
+      "name": "Prepare Payment Campaign Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -920,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000007",
+      "name": "Payment Campaign Lookup Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000008",
+      "name": "Store Payment Campaign Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_campaign_options', request_id: 'payment:options:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { campaignId: $('Validate Approved Transaction Input').item.json.campaignId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000009",
+      "name": "Prepare Approved Option Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000010",
+      "name": "Approved Option Lookup Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000011",
+      "name": "Store Approved Option Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.REVERB_FILL_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Promotion_Packages",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "id",
+              "lookupValue": "={{ $('Validate Approved Transaction Input').item.json.approvedPackageId }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000090",
+      "name": "Load Approved Package",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        290,
+        -80
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL + '/api/reach/quote?packageId=' + encodeURIComponent($('Validate Approved Transaction Input').item.json.approvedPackageId) }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000012",
+      "name": "Refetch Reach Quote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate Approved Transaction Input').item.json;\nconst campaign = $('Store Payment Campaign Lookup').item.json.data;\nconst options = $('Store Approved Option Lookup').item.json.data ?? [];\nconst option = options.find((item) => item.packageId === input.approvedPackageId);\nconst approvedPackage = $('Load Approved Package').first().json;\nif (!campaign || campaign.status !== 'AWAITING_OWNER_APPROVAL') return [{ json: { eligible: false, failureCode: 'WRONG_CAMPAIGN_STATUS', campaign, option, approvedPackage, quote: $json } }];\nif (!option || option.packageId !== input.approvedPackageId || !approvedPackage || approvedPackage.id !== input.approvedPackageId) return [{ json: { eligible: false, failureCode: 'PACKAGE_CHANGED', campaign, option, approvedPackage, quote: $json } }];\nif ($json.available !== true) return [{ json: { eligible: false, failureCode: 'PROVIDER_UNAVAILABLE', campaign, option, approvedPackage, quote: $json } }];\nif ($json.packageId !== approvedPackage.id || approvedPackage.providerId !== input.approvedProviderId || $json.merchantId !== approvedPackage.merchantId) return [{ json: { eligible: false, failureCode: 'MERCHANT_OR_PACKAGE_CHANGED', campaign, option, approvedPackage, quote: $json } }];\nif (Number($json.livePricePaise) !== Number(input.approvedAmountPaise) || Number(option.totalCostPaise) !== Number(input.approvedAmountPaise) || Number(approvedPackage.pricePaise) !== Number(input.approvedAmountPaise)) return [{ json: { eligible: false, failureCode: 'PRICE_CHANGED', campaign, option, approvedPackage, quote: $json } }];\nif (Number($json.livePricePaise) > Number(campaign.maxBudgetPaise)) return [{ json: { eligible: false, failureCode: 'BUDGET_EXCEEDED', campaign, option, approvedPackage, quote: $json } }];\nif (Number(option.expectedCpaPaise) > Number(campaign.maxExpectedCpaPaise)) return [{ json: { eligible: false, failureCode: 'HIGH_CPA', campaign, option, approvedPackage, quote: $json } }];\nif (Date.parse($json.publicationDeadlineAt) > Date.parse(campaign.slotStartAt) || Date.now() > Date.parse($json.publicationDeadlineAt)) return [{ json: { eligible: false, failureCode: 'DEADLINE_CHANGED', campaign, option, approvedPackage, quote: $json } }];\nreturn [{ json: { eligible: true, failureCode: null, campaign, option, approvedPackage, quote: $json, input } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000013",
+      "name": "Rerun Deterministic Checkout Policy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.failureCode || 'ELIGIBLE' }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "ELIGIBLE"
+            },
+            {
+              "value2": "PRICE_CHANGED",
+              "output": 1
+            },
+            {
+              "value2": "PROVIDER_UNAVAILABLE",
+              "output": 2
+            },
+            {
+              "value2": "MERCHANT_OR_PACKAGE_CHANGED",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 4
+      },
+      "id": "13000000-0000-4000-8000-000000000014",
+      "name": "Route Precheckout Policy",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        840,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, status: 'PRICE_CHANGED', message: 'The live package price changed. No checkout was attempted.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000015",
+      "name": "Price Changed Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, status: 'PROVIDER_UNAVAILABLE', message: 'The provider is unavailable. No checkout was attempted.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000016",
+      "name": "Provider Unavailable Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, status: 'REJECTED_BY_POLICY', message: 'Live merchant or package details changed. No checkout was attempted.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000017",
+      "name": "Merchant Or Package Changed Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:precheckout-failure:' + $('Validate Approved Transaction Input').item.json.campaignId + ':' + $json.status, data: { id: $('Validate Approved Transaction Input').item.json.campaignId, status: $json.status, updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString(), safeStatus: $json.status, safeMessage: $json.message } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000091",
+      "name": "Prepare Precheckout Failure Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000092",
+      "name": "Precheckout Failure Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-reverb-timestamp", "value": "={{ $json.timestamp }}" },
+            { "name": "x-reverb-signature", "value": "={{ 'sha256=' + $json.storage_signature }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000093",
+      "name": "Store Precheckout Failure Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1720,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, event_type: $('Prepare Precheckout Failure Status').item.json.safeStatus, description: $('Prepare Precheckout Failure Status').item.json.safeMessage, metadata: { checkoutAttempted: false } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000094",
+      "name": "Audit Precheckout Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1940,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Rerun Deterministic Checkout Policy').item.json.campaign.requestedByOwnerId, text: $('Prepare Precheckout Failure Status').item.json.safeMessage, idempotencyKey: 'payment-policy:' + $('Validate Approved Transaction Input').item.json.campaignId + ':' + $('Prepare Precheckout Failure Status').item.json.safeStatus } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000018",
+      "name": "Send Precheckout Failure Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, status: $('Prepare Precheckout Failure Status').item.json.safeStatus, message: $('Prepare Precheckout Failure Status').item.json.safeMessage } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000019",
+      "name": "Return Precheckout Failure",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2380,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:prava-pending:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { id: $('Validate Approved Transaction Input').item.json.campaignId, status: 'PRAVA_PENDING', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000020",
+      "name": "Prepare Prava Pending",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000021",
+      "name": "Prava Pending Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000022",
+      "name": "Store Prava Pending",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, event_type: 'PRAVA_PENDING', description: 'Owner approved the selected spend and Prava approval is pending.', metadata: { providerId: $('Validate Approved Transaction Input').item.json.approvedProviderId, packageId: $('Validate Approved Transaction Input').item.json.approvedPackageId, amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000023",
+      "name": "Audit Prava Pending",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1720,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/prava/session' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Approved Transaction Input').item.json.campaignId, merchantId: $('Rerun Deterministic Checkout Policy').item.json.quote.merchantId, packageId: $('Validate Approved Transaction Input').item.json.approvedPackageId, merchantName: $('Rerun Deterministic Checkout Policy').item.json.quote.merchantName, packageName: $('Validate Approved Transaction Input').item.json.approvedPackageId, amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise, currency: 'INR', callbackUrl: $env.APP_URL + '/api/prava/result', idempotencyKey: 'prava-session:' + $('Validate Approved Transaction Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000024",
+      "name": "Create Prava Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1940,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'save_transaction', request_id: 'transaction:session:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { id: 'transaction_' + $('Validate Approved Transaction Input').item.json.campaignId, campaignId: $('Validate Approved Transaction Input').item.json.campaignId, ownerApprovalId: 'approval_' + $('Validate Approved Transaction Input').item.json.campaignId, providerId: $('Validate Approved Transaction Input').item.json.approvedProviderId, packageId: $('Validate Approved Transaction Input').item.json.approvedPackageId, status: 'SESSION_CREATED', currency: 'INR', amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise, idempotencyKey: 'checkout:' + $('Validate Approved Transaction Input').item.json.campaignId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000025",
+      "name": "Prepare Safe Session Transaction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000026",
+      "name": "Safe Session Transaction Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        2380,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000027",
+      "name": "Store Safe Session Transaction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Rerun Deterministic Checkout Policy').item.json.campaign.requestedByOwnerId, text: 'Please review and authorise the approved Reverb Fill purchase.', link: $('Create Prava Session').item.json.checkoutUrl, idempotencyKey: 'prava-link:' + $('Validate Approved Transaction Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000028",
+      "name": "Send Hosted Approval URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2820,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const configured = Number($env.N8N_MAX_PRAVA_POLLS || 5);\nconst count = Number.isSafeInteger(configured) && configured > 0 ? Math.min(configured, 10) : 5;\nreturn Array.from({ length: count }, (_, index) => ({ json: { attempt: index + 1 } }));"
+      },
+      "id": "13000000-0000-4000-8000-000000000029",
+      "name": "Create Bounded Poll Attempts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3040,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000030",
+      "name": "Poll Attempts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3260,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL + '/api/prava/result?campaignId=' + encodeURIComponent($('Validate Approved Transaction Input').item.json.campaignId) + '&sessionId=' + encodeURIComponent($('Create Prava Session').item.json.sessionId) + '&idempotencyKey=' + encodeURIComponent('prava-result:' + $('Validate Approved Transaction Input').item.json.campaignId + ':' + $json.attempt) }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000031",
+      "name": "Poll Prava Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3480,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.status }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "AWAITING_USER"
+            },
+            {
+              "value2": "AUTHORIZED",
+              "output": 1
+            },
+            {
+              "value2": "DECLINED",
+              "output": 2
+            },
+            {
+              "value2": "EXPIRED",
+              "output": 3
+            },
+            {
+              "value2": "FAILED",
+              "output": 4
+            },
+            {
+              "value2": "COMPLETED",
+              "output": 5
+            }
+          ]
+        },
+        "fallbackOutput": 6
+      },
+      "id": "13000000-0000-4000-8000-000000000032",
+      "name": "Route Prava Result",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        3700,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "13000000-0000-4000-8000-000000000033",
+      "name": "Wait Before Next Poll",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3920,
+        -380
+      ],
+      "webhookId": "13000000-0000-4000-8000-000000000900"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { campaignStatus: 'PAYMENT_DECLINED', safeStatus: 'USER_DECLINED', message: 'The owner declined the Prava approval. No checkout was attempted.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000034",
+      "name": "User Declined Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3920,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { campaignStatus: 'PRAVA_EXPIRED', safeStatus: 'SESSION_EXPIRED', message: 'The Prava approval session expired. No checkout was attempted.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000035",
+      "name": "Session Expired Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3920,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { campaignStatus: 'PAYMENT_DECLINED', safeStatus: 'PRAVA_FAILED', message: 'Prava could not authorise the purchase. No checkout was attempted.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000036",
+      "name": "Prava Failed Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3920,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { campaignStatus: 'ORDER_COMPLETED', safeStatus: 'DUPLICATE_CALLBACK', message: 'This payment callback was already completed.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000037",
+      "name": "Completed Callback Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3920,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { campaignStatus: 'PRAVA_PENDING', safeStatus: 'AWAITING_USER', message: 'Approval is still pending. No checkout was attempted.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000038",
+      "name": "Bounded Polls Exhausted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3480,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:prava-terminal:' + $('Validate Approved Transaction Input').item.json.campaignId + ':' + $json.safeStatus, data: { id: $('Validate Approved Transaction Input').item.json.campaignId, status: $json.campaignStatus, updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000039",
+      "name": "Prepare Terminal Prava Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4160,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000040",
+      "name": "Terminal Prava Status Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        4380,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000041",
+      "name": "Store Terminal Prava Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4600,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Rerun Deterministic Checkout Policy').item.json.campaign.requestedByOwnerId, text: $('Prepare Terminal Prava Status').item.json.storage_body.data.status === 'PRAVA_PENDING' ? 'Approval is still pending. No purchase was made.' : 'The payment approval did not complete. No purchase was made.', idempotencyKey: 'prava-terminal:' + $('Validate Approved Transaction Input').item.json.campaignId + ':' + $('Prepare Terminal Prava Status').item.json.storage_body.data.status } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000042",
+      "name": "Send Terminal Prava Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4820,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, status: $('Prepare Terminal Prava Status').item.json.storage_body.data.status, merchantOrderId: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000043",
+      "name": "Return Terminal Prava Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        5040,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_PAYMENT_LOCK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operation: 'acquire', campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, prava_session_id: $('Create Prava Session').item.json.sessionId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000044",
+      "name": "Acquire Irreversible Payment Lock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3920,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "13000000-0000-4000-8000-000000000745",
+              "leftValue": "={{ $json.acquired === true && $json.blocked === false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000045",
+      "name": "Payment Lock Acquired?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4140,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, status: 'DUPLICATE_CHECKOUT', message: 'A checkout attempt already started. The Prava authorisation will not be reused.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000046",
+      "name": "Duplicate Checkout Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4360,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Rerun Deterministic Checkout Policy').item.json.campaign.requestedByOwnerId, text: $json.message, idempotencyKey: 'duplicate-checkout:' + $('Validate Approved Transaction Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000047",
+      "name": "Send Duplicate Checkout Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4580,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000048",
+      "name": "Return Duplicate Checkout",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4800,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:payment-authorized:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { id: $('Validate Approved Transaction Input').item.json.campaignId, status: 'PAYMENT_AUTHORIZED', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000049",
+      "name": "Prepare Payment Authorized",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4360,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000050",
+      "name": "Payment Authorized Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        4580,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000051",
+      "name": "Store Payment Authorized",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4800,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:checkout-progress:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { id: $('Validate Approved Transaction Input').item.json.campaignId, status: 'CHECKOUT_IN_PROGRESS', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000052",
+      "name": "Prepare Checkout In Progress",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5020,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000053",
+      "name": "Checkout In Progress Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        5240,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000054",
+      "name": "Store Checkout In Progress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5460,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, event_type: 'CHECKOUT_STARTED', description: 'Prava authorised one provider checkout attempt.', metadata: { providerId: $('Validate Approved Transaction Input').item.json.approvedProviderId, packageId: $('Validate Approved Transaction Input').item.json.approvedPackageId, amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000055",
+      "name": "Audit Checkout Started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5680,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/reach/checkout' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Approved Transaction Input').item.json.campaignId, packageId: $('Validate Approved Transaction Input').item.json.approvedPackageId, approvedMerchantId: $('Rerun Deterministic Checkout Policy').item.json.quote.merchantId, approvedAmountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise, idempotencyKey: 'checkout:' + $('Validate Approved Transaction Input').item.json.campaignId, paymentAuthorisationReference: $('Poll Prava Result').item.json.authorizationId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000056",
+      "name": "Reach Checkout Exactly Once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5900,
+        -300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "if (typeof $json.orderId !== 'string' || $json.orderId.trim() === '') throw new Error('Merchant order is required before success');\nreturn [{ json: { checkout: $json, merchantOrderId: $json.orderId } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000057",
+      "name": "Require Merchant Order Before Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6120,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_transaction', request_id: 'checkout:reconcile:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { campaignId: $('Validate Approved Transaction Input').item.json.campaignId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000058",
+      "name": "Prepare Checkout Reconciliation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000059",
+      "name": "Checkout Reconciliation Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        6340,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000060",
+      "name": "Store Checkout Reconciliation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6560,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "13000000-0000-4000-8000-000000000761",
+              "leftValue": "={{ Boolean($json.data && $json.data.merchantOrderId) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000061",
+      "name": "Merchant Order Reconciled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6780,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { checkout: null, merchantOrderId: $json.data.merchantOrderId, reconciled: true } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000062",
+      "name": "Use Reconciled Merchant Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7000,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, status: 'CHECKOUT_FAILED', message: 'Provider checkout failed and no merchant order was found.' } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000063",
+      "name": "Checkout Failed Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7000,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_PAYMENT_LOCK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operation: 'mark_failed', campaign_id: $('Validate Approved Transaction Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000064",
+      "name": "Retain Failed Payment Lock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7220,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/prava/report' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Approved Transaction Input').item.json.campaignId, merchantId: $('Rerun Deterministic Checkout Policy').item.json.quote.merchantId, packageId: $('Validate Approved Transaction Input').item.json.approvedPackageId, merchantName: $('Rerun Deterministic Checkout Policy').item.json.quote.merchantName, packageName: $('Validate Approved Transaction Input').item.json.approvedPackageId, amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise, currency: 'INR', callbackUrl: $env.APP_URL + '/api/prava/result', idempotencyKey: 'prava-report-failed:' + $('Validate Approved Transaction Input').item.json.campaignId, sessionId: $('Create Prava Session').item.json.sessionId, checkoutOutcome: 'CHECKOUT_FAILED', merchantOrderId: null, occurredAt: new Date().toISOString(), failureReason: 'Provider checkout failed without a merchant order.' } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000065",
+      "name": "Report Safe Checkout Failure To Prava",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7440,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:checkout-failed:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { id: $('Validate Approved Transaction Input').item.json.campaignId, status: 'CHECKOUT_FAILED', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000066",
+      "name": "Prepare Checkout Failed Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7660,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000067",
+      "name": "Checkout Failed Status Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        7880,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000068",
+      "name": "Store Checkout Failed Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8100,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Rerun Deterministic Checkout Policy').item.json.campaign.requestedByOwnerId, text: 'Checkout failed and no merchant order was created. The approval cannot be reused.', idempotencyKey: 'checkout-failed:' + $('Validate Approved Transaction Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000069",
+      "name": "Send Checkout Failure Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8320,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, status: 'CHECKOUT_FAILED', merchantOrderId: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000070",
+      "name": "Return Checkout Failure",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        8540,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'save_merchant_order', request_id: 'merchant-order:save:' + $json.merchantOrderId, data: { id: $json.merchantOrderId, transactionId: 'transaction_' + $('Validate Approved Transaction Input').item.json.campaignId, providerId: $('Validate Approved Transaction Input').item.json.approvedProviderId, externalMerchantOrderId: $json.checkout?.externalMerchantOrderId || $json.merchantOrderId, status: 'CREATED', currency: 'INR', amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000071",
+      "name": "Prepare Merchant Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7220,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000072",
+      "name": "Merchant Order Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        7440,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000073",
+      "name": "Store Merchant Order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7660,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_PAYMENT_LOCK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operation: 'mark_completed', campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, merchant_order_id: $('Prepare Merchant Order').item.json.storage_body.data.id } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000074",
+      "name": "Complete Payment Lock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7880,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/prava/report' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Approved Transaction Input').item.json.campaignId, merchantId: $('Rerun Deterministic Checkout Policy').item.json.quote.merchantId, packageId: $('Validate Approved Transaction Input').item.json.approvedPackageId, merchantName: $('Rerun Deterministic Checkout Policy').item.json.quote.merchantName, packageName: $('Validate Approved Transaction Input').item.json.approvedPackageId, amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise, currency: 'INR', callbackUrl: $env.APP_URL + '/api/prava/result', idempotencyKey: 'prava-report-success:' + $('Validate Approved Transaction Input').item.json.campaignId, sessionId: $('Create Prava Session').item.json.sessionId, checkoutOutcome: 'MERCHANT_ORDER_CREATED', merchantOrderId: $('Prepare Merchant Order').item.json.storage_body.data.id, occurredAt: new Date().toISOString() } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000075",
+      "name": "Report Approved Merchant Order To Prava",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8100,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:order-completed:' + $('Validate Approved Transaction Input').item.json.campaignId, data: { id: $('Validate Approved Transaction Input').item.json.campaignId, status: 'ORDER_COMPLETED', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000076",
+      "name": "Prepare Order Completed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8320,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "13000000-0000-4000-8000-000000000077",
+      "name": "Order Completed Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        8540,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000078",
+      "name": "Store Order Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8760,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Approved Transaction Input').item.json.campaignId, event_type: 'MERCHANT_ORDER_CREATED', description: 'Provider checkout created a merchant order.', metadata: { merchantOrderId: $('Prepare Merchant Order').item.json.storage_body.data.id, amountPaise: $('Validate Approved Transaction Input').item.json.approvedAmountPaise } } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000079",
+      "name": "Audit Merchant Order Created",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8980,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_ACTIVATION_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Approved Transaction Input').item.json.campaignId, merchantOrderId: $('Prepare Merchant Order').item.json.storage_body.data.id } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000080",
+      "name": "Trigger Promotion Activation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        9200,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Rerun Deterministic Checkout Policy').item.json.campaign.requestedByOwnerId, text: 'Purchase authorised and merchant order ' + $('Prepare Merchant Order').item.json.storage_body.data.id + ' was created. Activation is starting.', idempotencyKey: 'order-created:' + $('Validate Approved Transaction Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000081",
+      "name": "Send Order Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        9420,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'ORDER_COMPLETED', merchantOrderId: $('Prepare Merchant Order').item.json.storage_body.data.id } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000082",
+      "name": "Return Merchant Order Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        9640,
+        -380
+      ]
+    }
+  ],
+  "connections": {
+    "Prepare Payment Campaign Lookup": {
+      "main": [
+        [
+          {
+            "node": "Payment Campaign Lookup Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Campaign Lookup Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Payment Campaign Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Approved Option Lookup": {
+      "main": [
+        [
+          {
+            "node": "Approved Option Lookup Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved Option Lookup Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Approved Option Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Prava Pending": {
+      "main": [
+        [
+          {
+            "node": "Prava Pending Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prava Pending Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Prava Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Safe Session Transaction": {
+      "main": [
+        [
+          {
+            "node": "Safe Session Transaction Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safe Session Transaction Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Safe Session Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Terminal Prava Status": {
+      "main": [
+        [
+          {
+            "node": "Terminal Prava Status Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Terminal Prava Status Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Terminal Prava Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Payment Authorized": {
+      "main": [
+        [
+          {
+            "node": "Payment Authorized Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Authorized Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Payment Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Checkout In Progress": {
+      "main": [
+        [
+          {
+            "node": "Checkout In Progress Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkout In Progress Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Checkout In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Checkout Reconciliation": {
+      "main": [
+        [
+          {
+            "node": "Checkout Reconciliation Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkout Reconciliation Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Checkout Reconciliation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Checkout Failed Status": {
+      "main": [
+        [
+          {
+            "node": "Checkout Failed Status Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkout Failed Status Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Checkout Failed Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Merchant Order": {
+      "main": [
+        [
+          {
+            "node": "Merchant Order Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merchant Order Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Merchant Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order Completed": {
+      "main": [
+        [
+          {
+            "node": "Order Completed Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Completed Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Order Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receive Owner Approval": {
+      "main": [
+        [
+          {
+            "node": "Validate Approved Transaction Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Approved Transaction Input": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate Callback": {
+      "main": [
+        [
+          {
+            "node": "Duplicate Callback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate Callback?": {
+      "main": [
+        [
+          {
+            "node": "Duplicate Callback Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Payment Campaign Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Payment Campaign Lookup": {
+      "main": [
+        [
+          {
+            "node": "Prepare Approved Option Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Approved Option Lookup": {
+      "main": [
+        [
+          {
+            "node": "Load Approved Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Approved Package": {
+      "main": [
+        [
+          {
+            "node": "Refetch Reach Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refetch Reach Quote": {
+      "main": [
+        [
+          {
+            "node": "Rerun Deterministic Checkout Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rerun Deterministic Checkout Policy": {
+      "main": [
+        [
+          {
+            "node": "Route Precheckout Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Precheckout Policy": {
+      "main": [
+        [
+          {
+            "node": "Prepare Prava Pending",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Price Changed Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Provider Unavailable Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merchant Or Package Changed Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merchant Or Package Changed Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Price Changed Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Precheckout Failure Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider Unavailable Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Precheckout Failure Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merchant Or Package Changed Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Precheckout Failure Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Precheckout Failure Status": {
+      "main": [[{ "node": "Precheckout Failure Signature", "type": "main", "index": 0 }]]
+    },
+    "Precheckout Failure Signature": {
+      "main": [[{ "node": "Store Precheckout Failure Status", "type": "main", "index": 0 }]]
+    },
+    "Store Precheckout Failure Status": {
+      "main": [[{ "node": "Audit Precheckout Failure", "type": "main", "index": 0 }]]
+    },
+    "Audit Precheckout Failure": {
+      "main": [[{ "node": "Send Precheckout Failure Status", "type": "main", "index": 0 }]]
+    },
+    "Send Precheckout Failure Status": {
+      "main": [
+        [
+          {
+            "node": "Return Precheckout Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Prava Pending": {
+      "main": [
+        [
+          {
+            "node": "Audit Prava Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Prava Pending": {
+      "main": [
+        [
+          {
+            "node": "Create Prava Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Prava Session": {
+      "main": [
+        [
+          {
+            "node": "Prepare Safe Session Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Safe Session Transaction": {
+      "main": [
+        [
+          {
+            "node": "Send Hosted Approval URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Hosted Approval URL": {
+      "main": [
+        [
+          {
+            "node": "Create Bounded Poll Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Bounded Poll Attempts": {
+      "main": [
+        [
+          {
+            "node": "Poll Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Attempts": {
+      "main": [
+        [
+          {
+            "node": "Poll Prava Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bounded Polls Exhausted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Prava Result": {
+      "main": [
+        [
+          {
+            "node": "Route Prava Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Prava Result": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Next Poll",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acquire Irreversible Payment Lock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "User Declined Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Expired Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prava Failed Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Completed Callback Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Next Poll": {
+      "main": [
+        [
+          {
+            "node": "Poll Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Declined Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Terminal Prava Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Expired Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Terminal Prava Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prava Failed Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Terminal Prava Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completed Callback Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Terminal Prava Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bounded Polls Exhausted": {
+      "main": [
+        [
+          {
+            "node": "Prepare Terminal Prava Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Terminal Prava Status": {
+      "main": [
+        [
+          {
+            "node": "Audit Terminal Prava Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Terminal Prava Status": {
+      "main": [[{ "node": "Send Terminal Prava Status", "type": "main", "index": 0 }]]
+    },
+    "Send Terminal Prava Status": {
+      "main": [
+        [
+          {
+            "node": "Return Terminal Prava Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire Irreversible Payment Lock": {
+      "main": [
+        [
+          {
+            "node": "Payment Lock Acquired?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Lock Acquired?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Payment Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Duplicate Checkout Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate Checkout Branch": {
+      "main": [
+        [
+          {
+            "node": "Send Duplicate Checkout Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Duplicate Checkout Status": {
+      "main": [
+        [
+          {
+            "node": "Return Duplicate Checkout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Payment Authorized": {
+      "main": [
+        [
+          {
+            "node": "Audit Payment Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Payment Authorized": {
+      "main": [[{ "node": "Prepare Checkout In Progress", "type": "main", "index": 0 }]]
+    },
+    "Store Checkout In Progress": {
+      "main": [
+        [
+          {
+            "node": "Audit Checkout Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Checkout Started": {
+      "main": [
+        [
+          {
+            "node": "Reach Checkout Exactly Once",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reach Checkout Exactly Once": {
+      "main": [
+        [
+          {
+            "node": "Require Merchant Order Before Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Checkout Reconciliation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Checkout Reconciliation": {
+      "main": [
+        [
+          {
+            "node": "Merchant Order Reconciled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merchant Order Reconciled?": {
+      "main": [
+        [
+          {
+            "node": "Use Reconciled Merchant Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Checkout Failed Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Require Merchant Order Before Success": {
+      "main": [
+        [
+          {
+            "node": "Prepare Merchant Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Reconciled Merchant Order": {
+      "main": [
+        [
+          {
+            "node": "Prepare Merchant Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkout Failed Branch": {
+      "main": [
+        [
+          {
+            "node": "Retain Failed Payment Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retain Failed Payment Lock": {
+      "main": [
+        [
+          {
+            "node": "Report Safe Checkout Failure To Prava",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report Safe Checkout Failure To Prava": {
+      "main": [
+        [
+          {
+            "node": "Prepare Checkout Failed Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Checkout Failed Status": {
+      "main": [
+        [
+          {
+            "node": "Audit Checkout Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Checkout Failure": {
+      "main": [[{ "node": "Send Checkout Failure Status", "type": "main", "index": 0 }]]
+    },
+    "Send Checkout Failure Status": {
+      "main": [
+        [
+          {
+            "node": "Return Checkout Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Merchant Order": {
+      "main": [
+        [
+          {
+            "node": "Complete Payment Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complete Payment Lock": {
+      "main": [
+        [
+          {
+            "node": "Report Approved Merchant Order To Prava",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report Approved Merchant Order To Prava": {
+      "main": [
+        [
+          {
+            "node": "Prepare Order Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Order Completed": {
+      "main": [
+        [
+          {
+            "node": "Audit Merchant Order Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Merchant Order Created": {
+      "main": [
+        [
+          {
+            "node": "Trigger Promotion Activation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Promotion Activation": {
+      "main": [
+        [
+          {
+            "node": "Send Order Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Order Status": {
+      "main": [
+        [
+          {
+            "node": "Return Merchant Order Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

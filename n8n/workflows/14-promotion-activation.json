@@ -1,0 +1,1343 @@
+{
+  "name": "Reverb Fill - Promotion Activation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/promotion-activation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000001",
+      "name": "Receive Merchant Order",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1500,
+        0
+      ],
+      "webhookId": "14000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nfor (const field of ['campaignId','merchantOrderId']) if (typeof input[field] !== 'string' || input[field].trim() === '') throw new Error(field + ' is required');\nreturn [{ json: input }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000002",
+      "name": "Validate Activation Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_campaign', request_id: 'activation:campaign:' + $json.campaignId, data: { id: $json.campaignId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000003",
+      "name": "Prepare Activation Campaign Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1060,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000004",
+      "name": "Activation Campaign Lookup Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000005",
+      "name": "Store Activation Campaign Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_campaign_asset', request_id: 'activation:asset:' + $('Validate Activation Input').item.json.campaignId, data: { campaignId: $('Validate Activation Input').item.json.campaignId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000006",
+      "name": "Prepare Approved Asset Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000007",
+      "name": "Approved Asset Lookup Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000008",
+      "name": "Store Approved Asset Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_transaction', request_id: 'activation:transaction:' + $('Validate Activation Input').item.json.campaignId, data: { campaignId: $('Validate Activation Input').item.json.campaignId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000009",
+      "name": "Prepare Activation Transaction Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000010",
+      "name": "Activation Transaction Lookup Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000011",
+      "name": "Store Activation Transaction Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_merchant_order', request_id: 'activation:order:' + $('Validate Activation Input').item.json.merchantOrderId, data: { id: $('Validate Activation Input').item.json.merchantOrderId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000012",
+      "name": "Prepare Merchant Order Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000013",
+      "name": "Merchant Order Lookup Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000014",
+      "name": "Store Merchant Order Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const campaign = $('Store Activation Campaign Lookup').item.json.data;\nconst asset = $('Store Approved Asset Lookup').item.json.data;\nconst transaction = $('Store Activation Transaction Lookup').item.json.data;\nconst order = $('Store Merchant Order Lookup').item.json.data;\nif (!campaign || campaign.status !== 'ORDER_COMPLETED') throw new Error('Campaign must be ORDER_COMPLETED before activation');\nif (!asset || !order || !transaction) throw new Error('Approved asset, transaction, and merchant order are required');\nlet creative;\ntry { creative = JSON.parse(asset.content); } catch { creative = { caption: asset.content, providerBrief: asset.content }; }\nreturn [{ json: { campaign, asset, transaction, order, creative } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000015",
+      "name": "Require Order Completed Campaign",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/reach/orders/' + encodeURIComponent($json.order.id) + '/deliver' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { approvedCreative: JSON.stringify($json.creative), campaignBrief: $json.creative.providerBrief || $json.asset.content, idempotencyKey: 'reach-deliver:' + $json.order.id } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000016",
+      "name": "Deliver Creative And Provider Brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:activating:' + $('Validate Activation Input').item.json.campaignId, data: { id: $('Validate Activation Input').item.json.campaignId, status: 'ACTIVATING', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000017",
+      "name": "Prepare Campaign Activating",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000018",
+      "name": "Campaign Activating Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000019",
+      "name": "Store Campaign Activating",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2460,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { failureStage: 'DELIVERY', message: 'Creative delivery failed. Campaign was not activated.' } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000020",
+      "name": "Delivery Failure Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Activation Input').item.json.campaignId, event_type: 'BRIEF_DELIVERED', description: 'Approved creative and provider brief were delivered.', metadata: { merchantOrderId: $('Validate Activation Input').item.json.merchantOrderId } } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000021",
+      "name": "Audit Brief Delivered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2680,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/reach/orders/' + encodeURIComponent($('Validate Activation Input').item.json.merchantOrderId) + '/activate' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { idempotencyKey: 'reach-activate:' + $('Validate Activation Input').item.json.merchantOrderId } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000022",
+      "name": "Activate Reach Promotion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2900,
+        -160
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const url = $json.publicActivationUrl;\nlet valid = false;\ntry { const parsed = new URL(url); valid = parsed.protocol === 'https:' || parsed.protocol === 'http:'; } catch { valid = false; }\nreturn [{ json: { valid, publicActivationUrl: valid ? url : null, activation: $json } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000023",
+      "name": "Require Public Activation URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { valid: false, publicActivationUrl: null, failureStage: 'ACTIVATION', message: 'Provider activation failed. Campaign remains inactive.' } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000024",
+      "name": "Activation Provider Failure Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "14000000-0000-4000-8000-000000000725",
+              "leftValue": "={{ $json.valid === true && Boolean($json.publicActivationUrl) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000025",
+      "name": "Activation URL Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3340,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:activation-failed:' + $('Validate Activation Input').item.json.campaignId, data: { id: $('Validate Activation Input').item.json.campaignId, status: 'ACTIVATION_FAILED', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000026",
+      "name": "Prepare Activation Failed Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3560,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000027",
+      "name": "Activation Failed Status Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        3780,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000028",
+      "name": "Store Activation Failed Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4000,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Activation Input').item.json.campaignId, event_type: 'ACTIVATION_FAILED', description: 'Promotion activation did not return a valid activation URL.', metadata: { merchantOrderId: $('Validate Activation Input').item.json.merchantOrderId } } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000029",
+      "name": "Audit Activation Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4220,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, status: 'ACTIVATION_FAILED', activationUrl: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000030",
+      "name": "Return Activation Failure",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4440,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'save_merchant_order', request_id: 'merchant-order:active:' + $('Validate Activation Input').item.json.merchantOrderId, data: { ...$('Require Order Completed Campaign').item.json.order, status: 'ACTIVE', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000031",
+      "name": "Prepare Active Merchant Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3560,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000032",
+      "name": "Active Merchant Order Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        3780,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000033",
+      "name": "Store Active Merchant Order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4000,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'save_transaction', request_id: 'transaction:completed:' + $('Validate Activation Input').item.json.campaignId, data: { ...$('Require Order Completed Campaign').item.json.transaction, status: 'COMPLETED', merchantOrderId: $('Validate Activation Input').item.json.merchantOrderId, updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000034",
+      "name": "Prepare Completed Transaction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4220,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000035",
+      "name": "Completed Transaction Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        4440,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000036",
+      "name": "Store Completed Transaction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4660,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:active:' + $('Validate Activation Input').item.json.campaignId, data: { id: $('Validate Activation Input').item.json.campaignId, status: 'ACTIVE', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "14000000-0000-4000-8000-000000000037",
+      "name": "Prepare Campaign Active",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4880,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "14000000-0000-4000-8000-000000000038",
+      "name": "Campaign Active Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        5100,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000039",
+      "name": "Store Campaign Active",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5320,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Activation Input').item.json.campaignId, event_type: 'PROMOTION_SCHEDULED', description: 'Provider accepted the promotion schedule.', metadata: { merchantOrderId: $('Validate Activation Input').item.json.merchantOrderId } } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000040",
+      "name": "Audit Promotion Scheduled",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5540,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Activation Input').item.json.campaignId, event_type: 'PROMOTION_ACTIVE', description: 'Promotion is active with a public activation URL.', metadata: { merchantOrderId: $('Validate Activation Input').item.json.merchantOrderId, activationUrl: $('Require Public Activation URL').item.json.publicActivationUrl } } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000041",
+      "name": "Audit Promotion Active",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5760,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Require Order Completed Campaign').item.json.campaign.requestedByOwnerId, text: 'Merchant order: ' + $('Validate Activation Input').item.json.merchantOrderId + '\nProvider: ' + ($('Require Public Activation URL').item.json.activation.order?.merchantName || $('Require Order Completed Campaign').item.json.order.providerId) + '\nAmount paid: INR ' + (Number($('Require Order Completed Campaign').item.json.order.amountPaise) / 100).toFixed(2) + '\nActivation: ' + $('Require Public Activation URL').item.json.publicActivationUrl + '\nRemaining budget: INR ' + ((Number($('Require Order Completed Campaign').item.json.campaign.maxBudgetPaise) - Number($('Require Order Completed Campaign').item.json.order.amountPaise)) / 100).toFixed(2), link: $env.APP_URL + '/reservations/track/' + $('Validate Activation Input').item.json.campaignId, idempotencyKey: 'activation-confirmation:' + $('Validate Activation Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000042",
+      "name": "Send Activation Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5980,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_REPORT_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Activation Input').item.json.campaignId, merchantOrderId: $('Validate Activation Input').item.json.merchantOrderId, activationUrl: $('Require Public Activation URL').item.json.publicActivationUrl } }}",
+        "options": {}
+      },
+      "id": "14000000-0000-4000-8000-000000000043",
+      "name": "Trigger Campaign Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6200,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'ACTIVE', merchantOrderId: $('Validate Activation Input').item.json.merchantOrderId, activationUrl: $('Require Public Activation URL').item.json.publicActivationUrl } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "14000000-0000-4000-8000-000000000044",
+      "name": "Return Activation Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        6420,
+        -260
+      ]
+    }
+  ],
+  "connections": {
+    "Prepare Activation Campaign Lookup": {
+      "main": [
+        [
+          {
+            "node": "Activation Campaign Lookup Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activation Campaign Lookup Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Activation Campaign Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Approved Asset Lookup": {
+      "main": [
+        [
+          {
+            "node": "Approved Asset Lookup Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved Asset Lookup Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Approved Asset Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Activation Transaction Lookup": {
+      "main": [
+        [
+          {
+            "node": "Activation Transaction Lookup Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activation Transaction Lookup Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Activation Transaction Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Merchant Order Lookup": {
+      "main": [
+        [
+          {
+            "node": "Merchant Order Lookup Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merchant Order Lookup Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Merchant Order Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Campaign Activating": {
+      "main": [
+        [
+          {
+            "node": "Campaign Activating Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign Activating Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Campaign Activating",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Activation Failed Status": {
+      "main": [
+        [
+          {
+            "node": "Activation Failed Status Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activation Failed Status Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Activation Failed Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Active Merchant Order": {
+      "main": [
+        [
+          {
+            "node": "Active Merchant Order Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active Merchant Order Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Active Merchant Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Completed Transaction": {
+      "main": [
+        [
+          {
+            "node": "Completed Transaction Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completed Transaction Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Completed Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Campaign Active": {
+      "main": [
+        [
+          {
+            "node": "Campaign Active Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign Active Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Campaign Active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receive Merchant Order": {
+      "main": [
+        [
+          {
+            "node": "Validate Activation Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Activation Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Activation Campaign Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Activation Campaign Lookup": {
+      "main": [
+        [
+          {
+            "node": "Prepare Approved Asset Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Approved Asset Lookup": {
+      "main": [
+        [
+          {
+            "node": "Prepare Activation Transaction Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Activation Transaction Lookup": {
+      "main": [
+        [
+          {
+            "node": "Prepare Merchant Order Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Merchant Order Lookup": {
+      "main": [
+        [
+          {
+            "node": "Require Order Completed Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Require Order Completed Campaign": {
+      "main": [
+        [
+          {
+            "node": "Deliver Creative And Provider Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver Creative And Provider Brief": {
+      "main": [
+        [
+          {
+            "node": "Prepare Campaign Activating",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delivery Failure Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery Failure Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Activation Failed Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Campaign Activating": {
+      "main": [
+        [
+          {
+            "node": "Audit Brief Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Brief Delivered": {
+      "main": [
+        [
+          {
+            "node": "Activate Reach Promotion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activate Reach Promotion": {
+      "main": [
+        [
+          {
+            "node": "Require Public Activation URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Activation Provider Failure Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Require Public Activation URL": {
+      "main": [
+        [
+          {
+            "node": "Activation URL Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activation Provider Failure Branch": {
+      "main": [
+        [
+          {
+            "node": "Activation URL Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activation URL Exists?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Active Merchant Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Activation Failed Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Activation Failed Status": {
+      "main": [
+        [
+          {
+            "node": "Audit Activation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Activation Failure": {
+      "main": [
+        [
+          {
+            "node": "Return Activation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Active Merchant Order": {
+      "main": [
+        [
+          {
+            "node": "Prepare Completed Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Completed Transaction": {
+      "main": [
+        [
+          {
+            "node": "Prepare Campaign Active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Campaign Active": {
+      "main": [
+        [
+          {
+            "node": "Audit Promotion Scheduled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Promotion Scheduled": {
+      "main": [
+        [
+          {
+            "node": "Audit Promotion Active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Promotion Active": {
+      "main": [
+        [
+          {
+            "node": "Send Activation Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Activation Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Trigger Campaign Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Campaign Report": {
+      "main": [
+        [
+          {
+            "node": "Return Activation Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

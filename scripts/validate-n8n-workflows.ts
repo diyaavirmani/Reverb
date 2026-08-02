@@ -4,6 +4,7 @@ import path from "node:path";
 type JsonRecord = Record<string, unknown>;
 
 const workflowsDirectory = path.resolve("n8n/workflows");
+const fixturesDirectory = path.resolve("n8n/fixtures");
 const sensitiveFieldPattern = /^(card(?:Data|Number)?|cvv|pan|payment[_-]?(?:token|credential)|paymentAuthori[sz]ationReference)$/i;
 const secretKeyPattern = /^(api[_-]?key|secret|password|authorization)$/i;
 
@@ -27,6 +28,24 @@ async function main(): Promise<void> {
     validateWorkflow(file, workflow, errors);
   }
 
+  const fixtureFiles = (await readdir(fixturesDirectory))
+    .filter((file) => file.endsWith(".json"))
+    .sort();
+
+  for (const file of fixtureFiles) {
+    const filePath = path.join(fixturesDirectory, file);
+    let fixture: unknown;
+
+    try {
+      fixture = JSON.parse(await readFile(filePath, "utf8"));
+    } catch (error) {
+      errors.push(`${file}: malformed fixture JSON (${safeErrorMessage(error)})`);
+      continue;
+    }
+
+    validateFixture(file, fixture, errors);
+  }
+
   if (errors.length > 0) {
     console.error(`n8n workflow validation failed (${errors.length} issue${errors.length === 1 ? "" : "s"}):`);
     for (const error of errors) {
@@ -36,7 +55,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`n8n workflows valid: ${files.length} file${files.length === 1 ? "" : "s"}`);
+  console.log(
+    `n8n workflows valid: ${files.length} workflow${files.length === 1 ? "" : "s"}, ${fixtureFiles.length} fixture${fixtureFiles.length === 1 ? "" : "s"}`
+  );
 }
 
 function validateWorkflow(file: string, value: unknown, errors: string[]): void {
@@ -59,6 +80,96 @@ function validateWorkflow(file: string, value: unknown, errors: string[]): void 
 
   if (value.active !== false) {
     errors.push(`${file}: active must be false`);
+  }
+
+  if (Array.isArray(value.nodes) && isRecord(value.connections)) {
+    validateGraph(file, value.nodes, value.connections, errors);
+  }
+
+  inspectValue(file, value, "$", errors);
+}
+
+function validateGraph(
+  file: string,
+  nodes: unknown[],
+  connections: JsonRecord,
+  errors: string[]
+): void {
+  const names = new Set<string>();
+  const ids = new Set<string>();
+
+  for (const [index, node] of nodes.entries()) {
+    if (!isRecord(node)) {
+      errors.push(`${file}: node ${index} must be an object`);
+      continue;
+    }
+
+    if (typeof node.name !== "string" || node.name.trim() === "") {
+      errors.push(`${file}: node ${index} requires a name`);
+    } else if (names.has(node.name)) {
+      errors.push(`${file}: duplicate node name ${node.name}`);
+    } else {
+      names.add(node.name);
+    }
+
+    if (typeof node.id !== "string" || node.id.trim() === "") {
+      errors.push(`${file}: node ${index} requires an id`);
+    } else if (ids.has(node.id)) {
+      errors.push(`${file}: duplicate node id ${node.id}`);
+    } else {
+      ids.add(node.id);
+    }
+
+    if (typeof node.type !== "string" || !isRecord(node.parameters)) {
+      errors.push(`${file}: node ${index} requires type and parameters`);
+    }
+  }
+
+  for (const [source, connectionGroup] of Object.entries(connections)) {
+    if (!names.has(source)) {
+      errors.push(`${file}: connection source does not exist: ${source}`);
+    }
+
+    if (!isRecord(connectionGroup) || !Array.isArray(connectionGroup.main)) {
+      errors.push(`${file}: invalid connection group for ${source}`);
+      continue;
+    }
+
+    for (const output of connectionGroup.main) {
+      if (!Array.isArray(output)) {
+        errors.push(`${file}: invalid connection output for ${source}`);
+        continue;
+      }
+
+      for (const connection of output) {
+        if (
+          !isRecord(connection) ||
+          typeof connection.node !== "string" ||
+          !names.has(connection.node)
+        ) {
+          errors.push(`${file}: connection from ${source} has an unknown target`);
+        }
+      }
+    }
+  }
+}
+
+function validateFixture(file: string, value: unknown, errors: string[]): void {
+  if (!isRecord(value)) {
+    errors.push(`${file}: fixture must be a JSON object`);
+    return;
+  }
+
+  if (typeof value.scenario !== "string" || value.scenario.trim() === "") {
+    errors.push(`${file}: fixture scenario is required`);
+  }
+
+  if (!isRecord(value.input)) {
+    errors.push(`${file}: fixture input must be an object`);
+  }
+
+  if (!isRecord(value.expected)) {
+    errors.push(`${file}: fixture expected result must be an object`);
   }
 
   inspectValue(file, value, "$", errors);

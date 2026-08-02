@@ -41,6 +41,8 @@ Open `http://localhost:5678`, create the local owner account, and keep the insta
 4. Verify every workflow remains inactive while configuring it.
 5. Test manually with fixture payloads before activation.
 
+Import workflows in numeric order. Workflows `10` through `14` depend on the technical workflows and storage gateway configured by workflows `01` through `05`. See `BUSINESS_WORKFLOWS.md` for endpoint variables, node behavior, fixture paths, and activation order.
+
 Run `npm run validate:n8n` before importing or committing workflow changes.
 
 ## Data Tables

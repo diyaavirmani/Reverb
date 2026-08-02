@@ -1,0 +1,824 @@
+{
+  "name": "Reverb Fill - Campaign Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/campaign-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000001",
+      "name": "Receive Normalized Linq Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1600,
+        0
+      ],
+      "webhookId": "10000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst headers = $json.headers ?? {};\nconst timestamp = headers['x-reverb-timestamp'];\nconst received_signature = headers['x-reverb-signature'];\nif (typeof timestamp !== 'string' || typeof received_signature !== 'string') throw new Error('Signed internal request required');\nconst timestampMs = /^\\d+$/.test(timestamp) ? Number(timestamp) * 1000 : Number.NaN;\nif (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 300000) throw new Error('Request timestamp is stale');\nreturn [{ json: { body, timestamp, received_signature, body_json: JSON.stringify(body) } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000002",
+      "name": "Normalize Signed Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.body_json }}",
+        "dataPropertyName": "expected_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000003",
+      "name": "Calculate Input Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const received = String($json.received_signature).replace(/^sha256=/, '');\nif (!/^[a-f0-9]{64}$/i.test(received) || received.toLowerCase() !== String($json.expected_signature).toLowerCase()) throw new Error('Invalid internal request signature');\nreturn [{ json: $json.body }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000004",
+      "name": "Verify Internal Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const field of ['eventId','eventType','conversationId','from','to']) { if (typeof $json[field] !== 'string' || $json[field].trim() === '') throw new Error('Invalid normalized Linq event'); }\nif (typeof $json.messageText !== 'string') throw new Error('messageText is required');\nreturn [{ json: $json }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000005",
+      "name": "Validate Normalized Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_CHECK_PROCESSED_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { event_id: $json.eventId, event_type: $json.eventType, source: 'linq', result_json: { conversationId: $json.conversationId } } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000006",
+      "name": "Check Processed Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "10000000-0000-4000-8000-000000000707",
+              "leftValue": "={{ $json.is_duplicate === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000007",
+      "name": "Duplicate Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { accepted: true, duplicate: true, eventId: $('Validate Normalized Event').item.json.eventId } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000008",
+      "name": "Return Duplicate Acceptance",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -40,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_CONVERSATION_STATE_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operation: 'get', conversation_id: $('Validate Normalized Event').item.json.conversationId } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000009",
+      "name": "Load Conversation State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -40,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/ai/intent' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { ownerMessage: $('Validate Normalized Event').item.json.messageText, spotId: ($json.data && $json.data.spot_id) || $env.DEMO_SPOT_ID, currentTime: new Date().toISOString() } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000010",
+      "name": "Extract Campaign Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('Validate Normalized Event').item.json;\nconst stateResponse = $('Load Conversation State').item.json;\nconst state = stateResponse.data ?? null;\nlet existing = {};\ntry { existing = state?.collected_fields_json ? JSON.parse(state.collected_fields_json) : {}; } catch { existing = {}; }\nconst intent = $json;\nconst extractedMissing = new Set(Array.isArray(intent.missingFields) ? intent.missingFields : []);\nconst merged = { ...existing };\nfor (const field of ['unusedCapacity','targetReservations','maximumBudgetPaise','maximumDiscountPercent','maximumExpectedCpaPaise','startTime','endTime']) { if (!extractedMissing.has(field) && intent[field] !== undefined) merged[field] = intent[field]; }\nmerged.spotId = state?.spot_id || $env.DEMO_SPOT_ID || merged.spotId;\nconst required = ['spotId','startTime','endTime','unusedCapacity','targetReservations','maximumBudgetPaise','maximumDiscountPercent','maximumExpectedCpaPaise'];\nconst missing = required.filter((field) => merged[field] === undefined || merged[field] === null || merged[field] === '');\nconst questions = { spotId: 'Which Spot is this campaign for?', startTime: 'When should the quiet slot start?', endTime: 'When should the quiet slot end?', unusedCapacity: 'How much unused capacity should we fill?', targetReservations: 'How many reservations should we target?', maximumBudgetPaise: 'What is the maximum campaign budget?', maximumDiscountPercent: 'What is the maximum discount percentage?', maximumExpectedCpaPaise: 'What is the maximum expected CPA?' };\nconst nextField = missing[0] ?? null;\nreturn [{ json: { event, existingState: state, merged, missing, nextField, question: nextField ? questions[nextField] : null, complete: missing.length === 0 } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000011",
+      "name": "Merge Collected Intake Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "10000000-0000-4000-8000-000000000712",
+              "leftValue": "={{ $json.complete === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000012",
+      "name": "Intake Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        620,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $json.event.from, text: $json.question, idempotencyKey: 'intake-question:' + $json.event.eventId + ':' + $json.nextField } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000013",
+      "name": "Ask One Missing Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_CONVERSATION_STATE_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operation: $('Merge Collected Intake Fields').item.json.existingState ? 'update' : 'create', conversation_id: $('Merge Collected Intake Fields').item.json.event.conversationId, owner_handle: $('Merge Collected Intake Fields').item.json.event.from, spot_id: $('Merge Collected Intake Fields').item.json.merged.spotId || $env.DEMO_SPOT_ID, collected_fields: $('Merge Collected Intake Fields').item.json.merged, missing_fields: $('Merge Collected Intake Fields').item.json.missing } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000014",
+      "name": "Save Incomplete Conversation State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { accepted: true, status: 'NEEDS_INFORMATION', askedField: $('Merge Collected Intake Fields').item.json.nextField } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000015",
+      "name": "Return Needs Information",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1300,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_CONVERSATION_STATE_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operation: $json.existingState ? 'update' : 'create', conversation_id: $json.event.conversationId, owner_handle: $json.event.from, spot_id: $json.merged.spotId, collected_fields: $json.merged, missing_fields: [] } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000016",
+      "name": "Save Complete Conversation State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const intake = $('Merge Collected Intake Fields').item.json;\nconst values = intake.merged;\nconst now = new Date().toISOString();\nconst campaignId = 'campaign_' + intake.event.eventId.replace(/[^a-zA-Z0-9_-]/g, '_');\nreturn [{ json: { campaign: { id: campaignId, spotId: values.spotId, requestedByOwnerId: intake.event.from, status: 'DRAFT', requestSummary: 'Campaign intake completed from Linq conversation ' + intake.event.conversationId, slotStartAt: values.startTime, slotEndAt: values.endTime, unusedCapacity: values.unusedCapacity, targetReservations: values.targetReservations, maxBudgetPaise: values.maximumBudgetPaise, maxDiscountBps: values.maximumDiscountPercent * 100, maxExpectedCpaPaise: values.maximumExpectedCpaPaise, createdAt: now, updatedAt: now }, event: intake.event } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000017",
+      "name": "Build Unique Campaign",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'create_campaign', request_id: 'campaign:create:' + $json.campaign.id, data: $json.campaign };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000018",
+      "name": "Prepare Campaign Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000019",
+      "name": "Campaign Draft Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000020",
+      "name": "Store Campaign Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1740,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:ready:' + $('Build Unique Campaign').item.json.campaign.id, data: { id: $('Build Unique Campaign').item.json.campaign.id, status: 'READY_FOR_DISCOVERY', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000021",
+      "name": "Prepare Campaign Ready",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000022",
+      "name": "Campaign Ready Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        2180,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000023",
+      "name": "Store Campaign Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Build Unique Campaign').item.json.campaign.id, event_type: 'CAMPAIGN_CREATED', description: 'Campaign created from complete owner intake.', metadata: { nextState: 'DRAFT', sourceEventId: $('Build Unique Campaign').item.json.event.eventId } } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000024",
+      "name": "Audit Campaign Created",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2620,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Build Unique Campaign').item.json.campaign.id, event_type: 'CAMPAIGN_READY_FOR_DISCOVERY', description: 'Campaign constraints are complete.', metadata: { previousState: 'DRAFT', nextState: 'READY_FOR_DISCOVERY' } } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000025",
+      "name": "Audit Ready For Discovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2840,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_DISCOVERY_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Build Unique Campaign').item.json.campaign.id } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000026",
+      "name": "Trigger Provider Discovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3060,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Build Unique Campaign').item.json.event.from, text: 'Thanks. Your campaign constraints are complete and provider discovery has started.', idempotencyKey: 'intake-ack:' + $('Build Unique Campaign').item.json.campaign.id } }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000027",
+      "name": "Acknowledge Owner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3280,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { accepted: true, status: 'READY_FOR_DISCOVERY', campaignId: $('Build Unique Campaign').item.json.campaign.id } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000028",
+      "name": "Return Campaign Intake Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3500,
+        -120
+      ]
+    }
+  ],
+  "connections": {
+    "Receive Normalized Linq Event": {
+      "main": [
+        [
+          {
+            "node": "Normalize Signed Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Signed Input": {
+      "main": [
+        [
+          {
+            "node": "Calculate Input Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Input Signature": {
+      "main": [
+        [
+          {
+            "node": "Verify Internal Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Campaign Draft": {
+      "main": [
+        [
+          {
+            "node": "Campaign Draft Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign Draft Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Campaign Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Campaign Ready": {
+      "main": [
+        [
+          {
+            "node": "Campaign Ready Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign Ready Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Campaign Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Internal Signature": {
+      "main": [
+        [
+          {
+            "node": "Validate Normalized Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Normalized Event": {
+      "main": [
+        [
+          {
+            "node": "Check Processed Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Processed Event": {
+      "main": [
+        [
+          {
+            "node": "Duplicate Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate Event?": {
+      "main": [
+        [
+          {
+            "node": "Return Duplicate Acceptance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load Conversation State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Conversation State": {
+      "main": [
+        [
+          {
+            "node": "Extract Campaign Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Campaign Intent": {
+      "main": [
+        [
+          {
+            "node": "Merge Collected Intake Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Collected Intake Fields": {
+      "main": [
+        [
+          {
+            "node": "Intake Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intake Complete?": {
+      "main": [
+        [
+          {
+            "node": "Save Complete Conversation State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask One Missing Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask One Missing Question": {
+      "main": [
+        [
+          {
+            "node": "Save Incomplete Conversation State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Incomplete Conversation State": {
+      "main": [
+        [
+          {
+            "node": "Return Needs Information",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Complete Conversation State": {
+      "main": [
+        [
+          {
+            "node": "Build Unique Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Unique Campaign": {
+      "main": [
+        [
+          {
+            "node": "Prepare Campaign Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Campaign Draft": {
+      "main": [
+        [
+          {
+            "node": "Prepare Campaign Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Campaign Ready": {
+      "main": [
+        [
+          {
+            "node": "Audit Campaign Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Campaign Created": {
+      "main": [
+        [
+          {
+            "node": "Audit Ready For Discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Ready For Discovery": {
+      "main": [
+        [
+          {
+            "node": "Trigger Provider Discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Provider Discovery": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Owner": {
+      "main": [
+        [
+          {
+            "node": "Return Campaign Intake Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

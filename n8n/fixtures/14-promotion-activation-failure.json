@@ -1,0 +1,12 @@
+{
+  "scenario": "promotion activation fails without a public URL",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "merchantOrderId": "fixture_reach_order_001"
+  },
+  "expected": {
+    "status": "ACTIVATION_FAILED",
+    "activationUrl": null,
+    "campaignMustNotBecomeActive": true
+  }
+}

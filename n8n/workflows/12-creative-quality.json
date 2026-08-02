@@ -1,0 +1,758 @@
+{
+  "name": "Reverb Fill - Creative Quality",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/creative-quality",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000001",
+      "name": "Receive Selected Package",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1400,
+        0
+      ],
+      "webhookId": "12000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nif (typeof input.campaignId !== 'string' || !input.selectedPackage || typeof input.selectedPackage !== 'object') throw new Error('campaignId and selectedPackage are required');\nreturn [{ json: input }];"
+      },
+      "id": "12000000-0000-4000-8000-000000000002",
+      "name": "Validate Creative Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:generating:' + $json.campaignId, data: { id: $json.campaignId, status: 'GENERATING_CREATIVE', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "12000000-0000-4000-8000-000000000003",
+      "name": "Prepare Generating Creative",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "12000000-0000-4000-8000-000000000004",
+      "name": "Generating Creative Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Creative Input').item.json.campaignId, event_type: 'GENERATING_CREATIVE', description: 'Creative generation started for the selected deterministic option.', metadata: { packageId: $('Validate Creative Input').item.json.selectedPackage.packageId, previousState: 'OPTIONS_READY', nextState: 'GENERATING_CREATIVE' } } }}",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000090",
+      "name": "Audit Creative Generation Started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-410, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "12000000-0000-4000-8000-000000000005",
+      "name": "Store Generating Creative",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Creative Input').item.json.campaignId, event_type: 'QUALITY_REVIEW', description: 'Deterministic and AI quality review completed.', metadata: { previousState: 'GENERATING_CREATIVE', nextState: 'QUALITY_REVIEW', passed: $('Combine Quality Results').item.json.passed, issueCodes: $('Combine Quality Results').item.json.issues } } }}",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000091",
+      "name": "Audit Quality Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1140, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/ai/generate-campaign' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Creative Input').item.json.campaignId, packageId: $('Validate Creative Input').item.json.selectedPackage.packageId, spotName: $('Validate Creative Input').item.json.selectedPackage.spot?.name || 'Quiet Cup Cafe', timeWindow: $('Validate Creative Input').item.json.selectedPackage.campaign.slotStartAt + ' to ' + $('Validate Creative Input').item.json.selectedPackage.campaign.slotEndAt, offerText: ($('Validate Creative Input').item.json.selectedPackage.discountBps / 100) + '% offer', constraints: { provider: $('Validate Creative Input').item.json.selectedPackage.providerName, package: $('Validate Creative Input').item.json.selectedPackage.packageName, pricePaise: $('Validate Creative Input').item.json.selectedPackage.exactPricePaise, expectedCpaPaise: $('Validate Creative Input').item.json.selectedPackage.worstCaseExpectedCpaPaise, deadline: $('Validate Creative Input').item.json.selectedPackage.deadline } } }}",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000006",
+      "name": "Generate Selected Package Creative",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const selected = $('Validate Creative Input').item.json.selectedPackage;\nconst creative = $json;\nconst campaign = selected.campaign;\nconst spotName = selected.spot?.name || 'Quiet Cup Cafe';\nconst allText = [creative.headline,creative.caption,creative.offerText,creative.callToAction,creative.providerBrief].filter(Boolean).join(' ').toLowerCase();\nconst issues = [];\nconst requireFact = (condition, code) => { if (!condition) issues.push(code); };\nrequireFact(allText.includes(spotName.toLowerCase()), 'incorrect_spot_name');\nrequireFact(allText.includes(campaign.slotStartAt.slice(0,10)) || allText.includes('friday'), 'incorrect_campaign_date');\nrequireFact(allText.includes('7') && allText.includes('9'), 'incorrect_campaign_time');\nrequireFact(Number(selected.discountBps) <= Number(campaign.maxDiscountBps), 'discount_above_limit');\nrequireFact(typeof creative.callToAction === 'string' && creative.callToAction.trim().length > 0, 'missing_cta');\nrequireFact(selected.packageId === (selected.approvedPackageId ?? selected.packageId), 'changed_package');\nrequireFact(Number(selected.exactPricePaise) === Number(selected.approvedAmountPaise ?? selected.exactPricePaise), 'changed_price');\nrequireFact(Number(selected.exactPricePaise) <= Number(campaign.maxBudgetPaise), 'exceeded_budget');\nrequireFact(Number(selected.worstCaseExpectedCpaPaise) <= Number(campaign.maxExpectedCpaPaise), 'high_cpa');\nrequireFact(Date.parse(selected.deadline) <= Date.parse(campaign.slotStartAt) && Date.now() <= Date.parse(selected.deadline), 'invalid_deadline');\nrequireFact(selected.recurringBilling !== true, 'recurring_payment');\nreturn [{ json: { creative, deterministicApproved: issues.length === 0, deterministicIssues: issues, selected } }];"
+      },
+      "id": "12000000-0000-4000-8000-000000000007",
+      "name": "Run Deterministic Creative Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/ai/review-quality' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Creative Input').item.json.campaignId, creative: $json.creative, constraints: { deterministicIssues: $json.deterministicIssues, provider: $json.selected.providerName, package: $json.selected.packageName } } }}",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000008",
+      "name": "Review Tone And Clarity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const deterministic = $('Run Deterministic Creative Checks').item.json;\nconst ai = $json;\nconst issues = [...deterministic.deterministicIssues, ...(ai.issues ?? []), ...(ai.unsupportedClaims ?? []).map((claim) => 'unsupported_claim:' + claim)];\nreturn [{ json: { passed: deterministic.deterministicApproved && ai.approved === true && (ai.unsupportedClaims ?? []).length === 0, status: issues.length === 0 ? 'PASSED' : 'NEEDS_REVISION', issues, creative: deterministic.creative, selected: deterministic.selected, aiReview: ai } }];"
+      },
+      "id": "12000000-0000-4000-8000-000000000009",
+      "name": "Combine Quality Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:quality-review:' + $('Validate Creative Input').item.json.campaignId, data: { id: $('Validate Creative Input').item.json.campaignId, status: 'QUALITY_REVIEW', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "12000000-0000-4000-8000-000000000010",
+      "name": "Prepare Quality Review Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "12000000-0000-4000-8000-000000000011",
+      "name": "Quality Review Status Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "12000000-0000-4000-8000-000000000012",
+      "name": "Store Quality Review Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "12000000-0000-4000-8000-000000000713",
+              "leftValue": "={{ $('Combine Quality Results').item.json.passed === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000013",
+      "name": "Quality Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Creative Input').item.json.campaignId, event_type: 'CREATIVE_NEEDS_REVISION', description: 'Creative quality checks did not pass.', metadata: { issueCodes: $('Combine Quality Results').item.json.issues } } }}",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000014",
+      "name": "Audit Creative Revision Required",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, status: 'NEEDS_REVISION', issues: $('Combine Quality Results').item.json.issues } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "12000000-0000-4000-8000-000000000015",
+      "name": "Return Safe Revision Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1680,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'save_campaign_asset', request_id: 'asset:creative:' + $('Validate Creative Input').item.json.campaignId, data: { id: 'asset_creative_' + $('Validate Creative Input').item.json.campaignId, campaignId: $('Validate Creative Input').item.json.campaignId, optionId: $('Combine Quality Results').item.json.selected.option.id, type: 'PROMOTION_COPY', content: JSON.stringify($('Combine Quality Results').item.json.creative), generatedBy: 'OPENAI', model: 'configured-openai-model', requiresOwnerApproval: true, createdAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "12000000-0000-4000-8000-000000000016",
+      "name": "Prepare Campaign Asset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "12000000-0000-4000-8000-000000000017",
+      "name": "Campaign Asset Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "12000000-0000-4000-8000-000000000018",
+      "name": "Store Campaign Asset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1900,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:awaiting-owner:' + $('Validate Creative Input').item.json.campaignId, data: { id: $('Validate Creative Input').item.json.campaignId, status: 'AWAITING_OWNER_APPROVAL', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "12000000-0000-4000-8000-000000000019",
+      "name": "Prepare Awaiting Owner Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2120,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "12000000-0000-4000-8000-000000000020",
+      "name": "Awaiting Owner Approval Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "12000000-0000-4000-8000-000000000021",
+      "name": "Store Awaiting Owner Approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2560,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Creative Input').item.json.campaignId, event_type: 'AWAITING_OWNER_APPROVAL', description: 'Creative passed quality checks and is ready for owner review.', metadata: { providerId: $('Combine Quality Results').item.json.selected.providerId, packageId: $('Combine Quality Results').item.json.selected.packageId, amountPaise: $('Combine Quality Results').item.json.selected.exactPricePaise } } }}",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000022",
+      "name": "Audit Owner Review Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2780,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/linq/send' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $('Validate Creative Input').item.json.selected.campaign.requestedByOwnerId, text: 'Provider: ' + $('Combine Quality Results').item.json.selected.providerName + '\nPackage: ' + $('Combine Quality Results').item.json.selected.packageName + '\nPrice: INR ' + ($('Combine Quality Results').item.json.selected.exactPricePaise / 100).toFixed(2) + '\nExpected bookings: ' + $('Combine Quality Results').item.json.selected.expectedBookingMin + '-' + $('Combine Quality Results').item.json.selected.expectedBookingMax + '\nExpected CPA: INR ' + ($('Combine Quality Results').item.json.selected.expectedCpaMinimumPaise / 100).toFixed(2) + '-' + ($('Combine Quality Results').item.json.selected.expectedCpaMaximumPaise / 100).toFixed(2) + '\nRemaining budget: INR ' + ($('Combine Quality Results').item.json.selected.remainingBudgetPaise / 100).toFixed(2) + '\nReason: highest eligible deterministic score.', link: $env.APP_URL + '/review/' + $('Validate Creative Input').item.json.campaignId, idempotencyKey: 'owner-review:' + $('Validate Creative Input').item.json.campaignId } }}",
+        "options": {}
+      },
+      "id": "12000000-0000-4000-8000-000000000023",
+      "name": "Send Owner Review Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3000,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'AWAITING_OWNER_APPROVAL', campaignId: $('Validate Creative Input').item.json.campaignId } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "12000000-0000-4000-8000-000000000024",
+      "name": "Return Creative Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3220,
+        -180
+      ]
+    }
+  ],
+  "connections": {
+    "Prepare Generating Creative": {
+      "main": [
+        [
+          {
+            "node": "Generating Creative Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generating Creative Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Generating Creative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Quality Review Status": {
+      "main": [
+        [
+          {
+            "node": "Quality Review Status Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Review Status Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Quality Review Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Campaign Asset": {
+      "main": [
+        [
+          {
+            "node": "Campaign Asset Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign Asset Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Campaign Asset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Awaiting Owner Approval": {
+      "main": [
+        [
+          {
+            "node": "Awaiting Owner Approval Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Awaiting Owner Approval Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Awaiting Owner Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receive Selected Package": {
+      "main": [
+        [
+          {
+            "node": "Validate Creative Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Creative Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Generating Creative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Generating Creative": {
+      "main": [
+        [
+          {
+            "node": "Audit Creative Generation Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Creative Generation Started": {
+      "main": [[{ "node": "Generate Selected Package Creative", "type": "main", "index": 0 }]]
+    },
+    "Generate Selected Package Creative": {
+      "main": [
+        [
+          {
+            "node": "Run Deterministic Creative Checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Deterministic Creative Checks": {
+      "main": [
+        [
+          {
+            "node": "Review Tone And Clarity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Tone And Clarity": {
+      "main": [
+        [
+          {
+            "node": "Combine Quality Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Quality Results": {
+      "main": [
+        [
+          {
+            "node": "Prepare Quality Review Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Quality Review Status": {
+      "main": [
+        [
+          {
+            "node": "Audit Quality Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Quality Review": {
+      "main": [[{ "node": "Quality Passed?", "type": "main", "index": 0 }]]
+    },
+    "Quality Passed?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Campaign Asset",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audit Creative Revision Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Creative Revision Required": {
+      "main": [
+        [
+          {
+            "node": "Return Safe Revision Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Campaign Asset": {
+      "main": [
+        [
+          {
+            "node": "Prepare Awaiting Owner Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Awaiting Owner Approval": {
+      "main": [
+        [
+          {
+            "node": "Audit Owner Review Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Owner Review Ready": {
+      "main": [
+        [
+          {
+            "node": "Send Owner Review Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Owner Review Summary": {
+      "main": [
+        [
+          {
+            "node": "Return Creative Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

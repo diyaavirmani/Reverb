@@ -1,0 +1,50 @@
+{
+  "scenario": "deterministic provider discovery selects package A",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "evaluatedAt": "2026-08-02T00:00:00.000Z",
+    "maximumBudgetPaise": 500000,
+    "maximumExpectedCpaPaise": 85000,
+    "targetReservations": 6
+  },
+  "expected": {
+    "selectedPackageId": "package_local_dining_boost",
+    "selectedProviderId": "provider_reach_local_dining",
+    "exactPricePaise": 480000,
+    "expectedBookingRange": {
+      "min": 6,
+      "max": 9
+    },
+    "expectedCpaRangePaise": {
+      "min": 53334,
+      "max": 80000
+    },
+    "remainingBudgetPaise": 20000,
+    "evidenceConfidence": 0.94,
+    "scoreComponents": {
+      "geographicRelevance": 100,
+      "expectedBookingPotential": 100,
+      "evidenceConfidence": 94,
+      "costEfficiency": 5.88,
+      "timingAvailability": 0.75
+    },
+    "weightedFinalScore": 74.76,
+    "rejectedAlternatives": [
+      {
+        "packageId": "package_neighborhood_food_blast",
+        "reasons": [
+          "evidence_confidence_too_low",
+          "audience_geography_mismatch"
+        ]
+      },
+      {
+        "packageId": "package_premium_weekend_push",
+        "reasons": [
+          "budget_exceeded",
+          "publication_deadline_too_late",
+          "worst_case_cpa_exceeded"
+        ]
+      }
+    ]
+  }
+}

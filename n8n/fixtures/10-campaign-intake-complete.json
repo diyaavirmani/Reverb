@@ -1,0 +1,21 @@
+{
+  "scenario": "complete normalized Linq campaign intake",
+  "input": {
+    "eventId": "linq_event_campaign_complete_001",
+    "eventType": "message.received",
+    "conversationId": "conversation_demo_001",
+    "from": "+919900000001",
+    "to": "+919900000002",
+    "messageText": "Quiet Cup Cafe has 12 unused seats this Friday from 7 PM to 9 PM. Target 6 reservations with a maximum budget of 5000 rupees, 15 percent discount, and 850 rupees CPA.",
+    "raw": {
+      "fixture": true
+    }
+  },
+  "expected": {
+    "status": "READY_FOR_DISCOVERY",
+    "questionCount": 0,
+    "spotId": "spot_quiet_cup_cafe",
+    "maximumBudgetPaise": 500000,
+    "maximumExpectedCpaPaise": 85000
+  }
+}

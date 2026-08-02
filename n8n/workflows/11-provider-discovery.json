@@ -1,0 +1,987 @@
+{
+  "name": "Reverb Fill - Provider Discovery",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/provider-discovery",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000001",
+      "name": "Receive Campaign ID",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1500,
+        0
+      ],
+      "webhookId": "11000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nif (typeof input.campaignId !== 'string' || input.campaignId.trim() === '') throw new Error('campaignId is required');\nreturn [{ json: { campaignId: input.campaignId.trim() } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000002",
+      "name": "Validate Campaign Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'get_campaign', request_id: 'campaign:get:' + $json.campaignId, data: { id: $json.campaignId } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000003",
+      "name": "Prepare Campaign Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1060,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "11000000-0000-4000-8000-000000000004",
+      "name": "Campaign Lookup Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000005",
+      "name": "Store Campaign Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.REVERB_FILL_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Spots",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "id",
+              "lookupValue": "={{ $('Store Campaign Lookup').item.json.data.spotId }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000006",
+      "name": "Load Spot - Spots",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -220
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.REVERB_FILL_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Providers",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000007",
+      "name": "Load Providers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        -180,
+        -220
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.REVERB_FILL_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Promotion_Packages",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000008",
+      "name": "Load Promotion Packages",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        40,
+        -220
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:verifying:' + $('Validate Campaign Request').item.json.campaignId, data: { id: $('Validate Campaign Request').item.json.campaignId, status: 'VERIFYING_PROVIDERS', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000009",
+      "name": "Prepare Verifying Providers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "11000000-0000-4000-8000-000000000010",
+      "name": "Verifying Providers Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000011",
+      "name": "Store Verifying Providers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Campaign Request').item.json.campaignId, event_type: 'PROVIDER_VERIFICATION_STARTED', description: 'Provider evidence verification started.', metadata: { previousState: 'READY_FOR_DISCOVERY', nextState: 'VERIFYING_PROVIDERS' } } }}",
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000012",
+      "name": "Audit Provider Verification Started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const campaign = $('Store Campaign Lookup').item.json.data;\nconst spot = $('Load Spot - Spots').first().json;\nconst providers = $('Load Providers').all().map((item) => item.json);\nconst packages = $('Load Promotion Packages').all().map((item) => item.json);\nconst providerById = new Map(providers.map((provider) => [provider.id, provider]));\nconst slotStart = Date.parse(campaign.slotStartAt);\nreturn packages.filter((pkg) => { const provider = providerById.get(pkg.providerId); return provider?.isActive !== false && Date.parse(pkg.validFrom) <= slotStart && Date.parse(pkg.validUntil) >= slotStart; }).map((pkg) => ({ json: { campaign, spot, provider: providerById.get(pkg.providerId), package: pkg, campaignContext: { campaignId: campaign.id, spotId: spot.id, spotName: spot.name, category: spot.category, city: spot.addressCity, region: spot.addressRegion, countryCode: spot.addressCountryCode, slotStartAt: campaign.slotStartAt, slotEndAt: campaign.slotEndAt, maximumBudgetPaise: campaign.maxBudgetPaise, maximumExpectedCpaPaise: campaign.maxExpectedCpaPaise } } }));"
+      },
+      "id": "11000000-0000-4000-8000-000000000013",
+      "name": "Shortlist By Location And Availability",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/senso/verify-provider' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { provider: { id: $json.provider.id, name: $json.provider.name, merchantId: $json.provider.merchantId, adapter: $json.provider.adapter, verificationStatus: $json.provider.verificationStatus, isActive: $json.provider.isActive, createdAt: $json.provider.createdAt, updatedAt: $json.provider.updatedAt }, package: { id: $json.package.id, providerId: $json.package.providerId, merchantId: $json.package.merchantId, providerSku: $json.package.providerSku, title: $json.package.title, description: $json.package.description, currency: $json.package.currency, pricePaise: Number($json.package.pricePaise), expectedReservations: Number($json.package.expectedReservations), expectedCpaPaise: Number($json.package.expectedCpaPaise), discountBps: Number($json.package.discountBps), bookingDeadlineAt: $json.package.bookingDeadlineAt, validFrom: $json.package.validFrom, validUntil: $json.package.validUntil, verificationStatus: $json.package.verificationStatus, evidenceIds: Array.isArray($json.package.evidenceIds) ? $json.package.evidenceIds : String($json.package.evidenceIds).split(','), createdAt: $json.package.createdAt, updatedAt: $json.package.updatedAt }, campaignContext: $json.campaignContext } }}",
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000014",
+      "name": "Verify Provider With Senso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Shortlist By Location And Availability').item.json;\nconst { campaign, spot, provider, package: pkg } = source;\nconst evidence = $json;\nconst now = Date.now();\nconst price = Number(evidence.verifiedPricePaise ?? pkg.pricePaise);\nconst minimumBookings = Number(evidence.historicalBookingMin);\nconst maximumBookings = Number(evidence.historicalBookingMax);\nconst deadline = evidence.verifiedPublicationDeadline ?? pkg.bookingDeadlineAt;\nconst available = provider.isActive !== false && Date.parse(pkg.validFrom) <= Date.parse(campaign.slotStartAt) && Date.parse(pkg.validUntil) >= Date.parse(campaign.slotStartAt);\nconst worstCpa = minimumBookings > 0 ? Math.floor((price - 1) / minimumBookings) + 1 : null;\nconst bestCpa = maximumBookings > 0 ? Math.floor((price - 1) / maximumBookings) + 1 : null;\nconst rejectionCodes = [];\nconst reject = (code) => { if (!rejectionCodes.includes(code)) rejectionCodes.push(code); };\nif (!available) reject('PACKAGE_UNAVAILABLE');\nif (price > Number(campaign.maxBudgetPaise)) reject('BUDGET_EXCEEDED');\nif (pkg.hasRecurringBilling === true) reject('RECURRING_BILLING');\nif (Date.parse(deadline) > Date.parse(campaign.slotStartAt) || now > Date.parse(deadline)) reject('PUBLICATION_DEADLINE_TOO_LATE');\nif (minimumBookings <= 0) reject('ZERO_MINIMUM_EXPECTED_BOOKINGS');\nif (worstCpa !== null && worstCpa > Number(campaign.maxExpectedCpaPaise)) reject('WORST_CASE_CPA_EXCEEDED');\nif (evidence.verificationStatus === 'UNVERIFIED') reject('PROVIDER_EVIDENCE_UNVERIFIED');\nif (Number(evidence.evidenceConfidence) < 0.8) reject('EVIDENCE_CONFIDENCE_TOO_LOW');\nif (Number(evidence.localAudiencePercent) < 50) reject('AUDIENCE_GEOGRAPHY_MISMATCH');\nif (evidence.verifiedPricePaise !== null && Number(evidence.verifiedPricePaise) !== Number(pkg.pricePaise)) reject('PRICE_CHANGED');\nif (Number(pkg.discountBps) > Number(campaign.maxDiscountBps)) reject('DISCOUNT_EXCEEDED');\nconst clamp = (value) => Math.round(Math.min(100, Math.max(0, value)) * 100) / 100;\nconst geography = Number(evidence.localAudiencePercent) >= 50 ? 100 : 0;\nconst bookings = clamp((minimumBookings / Number(campaign.targetReservations)) * 100);\nconst confidence = clamp(Number(evidence.evidenceConfidence) * 100);\nconst cost = worstCpa === null ? 0 : clamp(((Number(campaign.maxExpectedCpaPaise) - worstCpa) / Number(campaign.maxExpectedCpaPaise)) * 100);\nconst windowMs = Date.parse(campaign.slotStartAt) - now;\nconst timing = !available || windowMs <= 0 || Date.parse(deadline) > Date.parse(campaign.slotStartAt) ? 0 : clamp(((Date.parse(campaign.slotStartAt) - Date.parse(deadline)) / windowMs) * 100);\nconst weightedFinalScore = rejectionCodes.length ? 0 : Math.round((geography * 0.30 + bookings * 0.25 + confidence * 0.20 + cost * 0.15 + timing * 0.10) * 100) / 100;\nconst reasons = rejectionCodes.map((code) => code.toLowerCase());\nconst sources = Array.isArray(evidence.sourceReferences) ? evidence.sourceReferences : [];\nreturn [{ json: { eligible: rejectionCodes.length === 0, rejectionCodes, rejectionReasons: reasons, weightedFinalScore, scoreComponents: { geographicRelevance: geography, expectedBookingPotential: bookings, evidenceConfidence: confidence, costEfficiency: cost, timingAvailability: timing }, packageId: pkg.id, providerId: provider.id, providerName: provider.name, merchantId: pkg.merchantId, packageName: pkg.title, exactPricePaise: price, expectedBookingMin: minimumBookings, expectedBookingMax: maximumBookings, expectedCpaMinimumPaise: bestCpa, expectedCpaMaximumPaise: worstCpa, worstCaseExpectedCpaPaise: worstCpa, remainingBudgetPaise: Number(campaign.maxBudgetPaise) - price, evidenceConfidence: Number(evidence.evidenceConfidence), sources, deadline, discountBps: Number(pkg.discountBps), recurringBilling: pkg.hasRecurringBilling === true, campaign, spot, option: { id: 'option_' + campaign.id + '_' + pkg.id, campaignId: campaign.id, packageId: pkg.id, evidenceIds: sources.map((item) => item.id), score: Math.round(weightedFinalScore), totalCostPaise: price, expectedReservations: Number(pkg.expectedReservations), expectedCpaPaise: worstCpa ?? 0, discountBps: Number(pkg.discountBps), deterministicBudget: price <= Number(campaign.maxBudgetPaise), deterministicDeadline: Date.parse(deadline) <= Date.parse(campaign.slotStartAt) && now <= Date.parse(deadline), deterministicPrice: evidence.verifiedPricePaise === null || Number(evidence.verifiedPricePaise) === Number(pkg.pricePaise), deterministicMerchant: true, deterministicDiscount: Number(pkg.discountBps) <= Number(campaign.maxDiscountBps), deterministicCpa: worstCpa !== null && worstCpa <= Number(campaign.maxExpectedCpaPaise), passesDeterministicChecks: rejectionCodes.length === 0, rejectionReasons: reasons, generatedSummary: rejectionCodes.length === 0 ? 'Eligible deterministic option' : 'Rejected: ' + reasons.join(', '), createdAt: new Date().toISOString() } } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000015",
+      "name": "Deterministic Policy And Scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const options = $input.all().map((item) => item.json);\nconst eligible = options.filter((item) => item.eligible).sort((a,b) => b.weightedFinalScore - a.weightedFinalScore || (a.worstCaseExpectedCpaPaise ?? Number.MAX_SAFE_INTEGER) - (b.worstCaseExpectedCpaPaise ?? Number.MAX_SAFE_INTEGER) || Date.parse(a.deadline) - Date.parse(b.deadline) || a.packageId.localeCompare(b.packageId));\nreturn [{ json: { options, selected: eligible[0] ?? null, rejectedAlternatives: options.filter((item) => !item.eligible).map((item) => ({ packageId: item.packageId, providerId: item.providerId, reasons: item.rejectionReasons })) } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000016",
+      "name": "Select Deterministic Winner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "11000000-0000-4000-8000-000000000717",
+              "leftValue": "={{ $json.selected !== null }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000017",
+      "name": "Eligible Winner Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2020,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Campaign Request').item.json.campaignId, event_type: 'NO_ELIGIBLE_PROVIDER_OPTIONS', description: 'All provider packages failed deterministic policy.', metadata: { rejectionCount: $('Select Deterministic Winner').item.json.rejectedAlternatives.length } } }}",
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000018",
+      "name": "Audit No Eligible Options",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, status: 'REJECTED_BY_POLICY', rejectedAlternatives: $('Select Deterministic Winner').item.json.rejectedAlternatives } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000019",
+      "name": "Return Policy Rejection",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2460,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'save_campaign_options', request_id: 'options:save:' + $('Validate Campaign Request').item.json.campaignId, data: $('Select Deterministic Winner').item.json.options.map((item) => item.option) };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000020",
+      "name": "Prepare Campaign Options",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "11000000-0000-4000-8000-000000000021",
+      "name": "Campaign Options Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        2460,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000022",
+      "name": "Store Campaign Options",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2680,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'update_campaign', request_id: 'campaign:options-ready:' + $('Validate Campaign Request').item.json.campaignId, data: { id: $('Validate Campaign Request').item.json.campaignId, status: 'OPTIONS_READY', updatedAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000023",
+      "name": "Prepare Options Ready",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "11000000-0000-4000-8000-000000000024",
+      "name": "Options Ready Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000025",
+      "name": "Store Options Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3340,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL + '/api/ai/explain-decision' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Campaign Request').item.json.campaignId, selectedPackageId: $('Select Deterministic Winner').item.json.selected.packageId, selectedReasons: ['highest_deterministic_score','eligible_under_all_policy_checks'], rejectedAlternatives: $('Select Deterministic Winner').item.json.rejectedAlternatives, riskFacts: $('Select Deterministic Winner').item.json.selected.rejectionReasons } }}",
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000026",
+      "name": "Explain Provider Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3560,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storage_body = { operation: 'save_campaign_asset', request_id: 'asset:decision:' + $('Validate Campaign Request').item.json.campaignId, data: { id: 'asset_decision_' + $('Validate Campaign Request').item.json.campaignId, campaignId: $('Validate Campaign Request').item.json.campaignId, optionId: $('Select Deterministic Winner').item.json.selected.option.id, type: 'OWNER_SUMMARY', content: JSON.stringify($json), generatedBy: 'OPENAI', model: 'configured-openai-model', requiresOwnerApproval: true, createdAt: new Date().toISOString() } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "11000000-0000-4000-8000-000000000027",
+      "name": "Prepare Decision Explanation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3780,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.storage_json }}",
+        "dataPropertyName": "storage_signature",
+        "secret": "={{ $env.N8N_INTERNAL_SECRET }}"
+      },
+      "id": "11000000-0000-4000-8000-000000000028",
+      "name": "Decision Explanation Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        4000,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.storage_body }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-reverb-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-reverb-signature",
+              "value": "={{ 'sha256=' + $json.storage_signature }}"
+            }
+          ]
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000029",
+      "name": "Store Decision Explanation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4220,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AUDIT_EVENT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaign_id: $('Validate Campaign Request').item.json.campaignId, event_type: 'OPTIONS_READY', description: 'Deterministic provider selection completed.', metadata: { selectedPackageId: $('Select Deterministic Winner').item.json.selected.packageId, selectedProviderId: $('Select Deterministic Winner').item.json.selected.providerId, amountPaise: $('Select Deterministic Winner').item.json.selected.exactPricePaise } } }}",
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000030",
+      "name": "Audit Options Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4440,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_CREATIVE_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { campaignId: $('Validate Campaign Request').item.json.campaignId, selectedPackage: $('Select Deterministic Winner').item.json.selected, rejectedAlternatives: $('Select Deterministic Winner').item.json.rejectedAlternatives, decisionExplanation: $('Explain Provider Decision').item.json } }}",
+        "options": {}
+      },
+      "id": "11000000-0000-4000-8000-000000000031",
+      "name": "Trigger Campaign Generation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4660,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'OPTIONS_READY', selectedPackage: $('Select Deterministic Winner').item.json.selected, selectedProvider: { id: $('Select Deterministic Winner').item.json.selected.providerId, name: $('Select Deterministic Winner').item.json.selected.providerName }, exactPricePaise: $('Select Deterministic Winner').item.json.selected.exactPricePaise, expectedBookingRange: { min: $('Select Deterministic Winner').item.json.selected.expectedBookingMin, max: $('Select Deterministic Winner').item.json.selected.expectedBookingMax }, expectedCpaRangePaise: { min: $('Select Deterministic Winner').item.json.selected.expectedCpaMinimumPaise, max: $('Select Deterministic Winner').item.json.selected.expectedCpaMaximumPaise }, remainingBudgetPaise: $('Select Deterministic Winner').item.json.selected.remainingBudgetPaise, evidenceConfidence: $('Select Deterministic Winner').item.json.selected.evidenceConfidence, sources: $('Select Deterministic Winner').item.json.selected.sources, rejectedAlternatives: $('Select Deterministic Winner').item.json.rejectedAlternatives } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "11000000-0000-4000-8000-000000000032",
+      "name": "Return Discovery Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4880,
+        -300
+      ]
+    }
+  ],
+  "connections": {
+    "Prepare Campaign Lookup": {
+      "main": [
+        [
+          {
+            "node": "Campaign Lookup Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign Lookup Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Campaign Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Verifying Providers": {
+      "main": [
+        [
+          {
+            "node": "Verifying Providers Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifying Providers Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Verifying Providers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Campaign Options": {
+      "main": [
+        [
+          {
+            "node": "Campaign Options Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign Options Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Campaign Options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Options Ready": {
+      "main": [
+        [
+          {
+            "node": "Options Ready Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Options Ready Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Options Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Decision Explanation": {
+      "main": [
+        [
+          {
+            "node": "Decision Explanation Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Explanation Signature": {
+      "main": [
+        [
+          {
+            "node": "Store Decision Explanation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receive Campaign ID": {
+      "main": [
+        [
+          {
+            "node": "Validate Campaign Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Campaign Request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Campaign Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Campaign Lookup": {
+      "main": [
+        [
+          {
+            "node": "Load Spot - Spots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Spot - Spots": {
+      "main": [
+        [
+          {
+            "node": "Load Providers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Providers": {
+      "main": [
+        [
+          {
+            "node": "Load Promotion Packages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Promotion Packages": {
+      "main": [
+        [
+          {
+            "node": "Prepare Verifying Providers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Verifying Providers": {
+      "main": [
+        [
+          {
+            "node": "Audit Provider Verification Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Provider Verification Started": {
+      "main": [
+        [
+          {
+            "node": "Shortlist By Location And Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shortlist By Location And Availability": {
+      "main": [
+        [
+          {
+            "node": "Verify Provider With Senso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Provider With Senso": {
+      "main": [
+        [
+          {
+            "node": "Deterministic Policy And Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic Policy And Scoring": {
+      "main": [
+        [
+          {
+            "node": "Select Deterministic Winner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Deterministic Winner": {
+      "main": [
+        [
+          {
+            "node": "Eligible Winner Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eligible Winner Exists?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Campaign Options",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audit No Eligible Options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit No Eligible Options": {
+      "main": [
+        [
+          {
+            "node": "Return Policy Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Campaign Options": {
+      "main": [
+        [
+          {
+            "node": "Prepare Options Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Options Ready": {
+      "main": [
+        [
+          {
+            "node": "Explain Provider Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explain Provider Decision": {
+      "main": [
+        [
+          {
+            "node": "Prepare Decision Explanation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Decision Explanation": {
+      "main": [
+        [
+          {
+            "node": "Audit Options Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Options Ready": {
+      "main": [
+        [
+          {
+            "node": "Trigger Campaign Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Campaign Generation": {
+      "main": [
+        [
+          {
+            "node": "Return Discovery Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

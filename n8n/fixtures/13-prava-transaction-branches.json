@@ -1,0 +1,25 @@
+{
+  "scenario": "Prava transaction terminal and safety branches",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "ownerApproval": true,
+    "approvedProviderId": "provider_reach_local_dining",
+    "approvedPackageId": "package_local_dining_boost",
+    "approvedAmountPaise": 480000
+  },
+  "expected": {
+    "branches": [
+      { "name": "success", "status": "ORDER_COMPLETED", "merchantOrderRequired": true },
+      { "name": "price changed", "status": "PRICE_CHANGED", "checkoutAttempted": false },
+      { "name": "session expired", "status": "PRAVA_EXPIRED", "checkoutAttempted": false },
+      { "name": "user declined", "status": "PAYMENT_DECLINED", "checkoutAttempted": false },
+      { "name": "provider unavailable", "status": "PROVIDER_UNAVAILABLE", "checkoutAttempted": false },
+      { "name": "checkout failed", "status": "CHECKOUT_FAILED", "merchantOrderRequired": false },
+      { "name": "duplicate callback", "status": "DUPLICATE_CALLBACK", "checkoutAttempted": false },
+      { "name": "duplicate checkout", "status": "DUPLICATE_CHECKOUT", "checkoutAttempted": false }
+    ],
+    "pravaSuccessReport": "MERCHANT_ORDER_CREATED",
+    "pravaFailureReport": "CHECKOUT_FAILED",
+    "credentialPersisted": false
+  }
+}

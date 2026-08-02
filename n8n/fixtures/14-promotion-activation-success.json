@@ -1,0 +1,16 @@
+{
+  "scenario": "promotion activation succeeds with a public URL",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "merchantOrderId": "fixture_reach_order_001"
+  },
+  "expected": {
+    "status": "ACTIVE",
+    "activationUrl": "https://reach.example.test/activations/fixture_reach_order_001",
+    "auditEvents": [
+      "BRIEF_DELIVERED",
+      "PROMOTION_SCHEDULED",
+      "PROMOTION_ACTIVE"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "scenario": "deterministic creative quality rejection matrix",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "selectedPackageId": "package_local_dining_boost"
+  },
+  "expected": {
+    "passingStatus": "AWAITING_OWNER_APPROVAL",
+    "failureStatus": "NEEDS_REVISION",
+    "rejectionCases": [
+      { "case": "incorrect spot name", "issueCode": "incorrect_spot_name" },
+      { "case": "incorrect date", "issueCode": "incorrect_campaign_date" },
+      { "case": "incorrect time", "issueCode": "incorrect_campaign_time" },
+      { "case": "discount above limit", "issueCode": "discount_above_limit" },
+      { "case": "missing CTA", "issueCode": "missing_cta" },
+      { "case": "changed package", "issueCode": "changed_package" },
+      { "case": "changed price", "issueCode": "changed_price" },
+      { "case": "exceeded budget", "issueCode": "exceeded_budget" },
+      { "case": "high CPA", "issueCode": "high_cpa" },
+      { "case": "invalid deadline", "issueCode": "invalid_deadline" },
+      { "case": "recurring payment", "issueCode": "recurring_payment" }
+    ]
+  }
+}

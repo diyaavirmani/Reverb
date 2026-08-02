@@ -1,0 +1,29 @@
+{
+  "scenario": "campaign intake asks exactly one new question",
+  "input": {
+    "eventId": "linq_event_campaign_missing_001",
+    "eventType": "message.received",
+    "conversationId": "conversation_demo_002",
+    "from": "+919900000001",
+    "to": "+919900000002",
+    "messageText": "Use the same Friday slot and budget, but I have not chosen a reservation target.",
+    "raw": {
+      "fixture": true
+    },
+    "collectedFields": {
+      "spotId": "spot_quiet_cup_cafe",
+      "startTime": "2026-08-07T13:30:00.000Z",
+      "endTime": "2026-08-07T15:30:00.000Z",
+      "unusedCapacity": 12,
+      "maximumBudgetPaise": 500000,
+      "maximumDiscountPercent": 15,
+      "maximumExpectedCpaPaise": 85000
+    }
+  },
+  "expected": {
+    "status": "NEEDS_INFORMATION",
+    "questionCount": 1,
+    "askedField": "targetReservations",
+    "alreadyCollectedFieldMustNotBeAsked": "maximumBudgetPaise"
+  }
+}
