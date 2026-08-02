@@ -1,0 +1,13 @@
+﻿{
+  "sessionId": "fixture_prava_completed",
+  "campaignId": "campaign_demo_friday",
+  "status": "COMPLETED",
+  "currency": "INR",
+  "amountPaise": 480000,
+  "authorizationId": "fixture_prava_auth_completed",
+  "completedAt": "2026-08-01T00:10:00.000Z",
+  "expiresAt": null,
+  "declinedReason": null,
+  "failureReason": null,
+  "isFixture": true
+}

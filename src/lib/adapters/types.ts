@@ -5,6 +5,12 @@
   DecisionExplanation,
   DecisionRejectedAlternative,
   OpenAIQualityReview,
+  PravaCreateSessionRequest,
+  PravaCreateSessionResult,
+  PravaGetPaymentResultRequest,
+  PravaPaymentResult,
+  PravaReportCheckoutOutcomeRequest,
+  PravaReportCheckoutOutcomeResult,
   PromotionPackage,
   PromotionProvider,
   SensoCampaignContext,
@@ -77,22 +83,13 @@ export interface LinqAdapter {
   sendMessage(request: LinqSendMessageRequest): Promise<LinqSendMessageResult>;
 }
 
-export type PravaAuthorizePaymentRequest = {
-  campaignId: string;
-  amountPaise: number;
-  currency: "INR";
-  idempotencyKey: string;
-};
-
-export type PravaAuthorizePaymentResult = {
-  authorizationId: string;
-  expiresAt: string;
-  status: "AUTHORIZED";
-};
-
 export interface PravaAdapter {
   readonly mode: AdapterMode;
-  authorizePayment(request: PravaAuthorizePaymentRequest): Promise<PravaAuthorizePaymentResult>;
+  createSession(request: PravaCreateSessionRequest): Promise<PravaCreateSessionResult>;
+  getPaymentResult(request: PravaGetPaymentResultRequest): Promise<PravaPaymentResult>;
+  reportCheckoutOutcome(
+    request: PravaReportCheckoutOutcomeRequest
+  ): Promise<PravaReportCheckoutOutcomeResult>;
 }
 
 export type N8nStorageRecord = Record<string, unknown>;

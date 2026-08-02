@@ -1,0 +1,13 @@
+﻿{
+  "sessionId": "fixture_prava_declined",
+  "campaignId": "campaign_demo_friday",
+  "status": "DECLINED",
+  "currency": "INR",
+  "amountPaise": 480000,
+  "authorizationId": null,
+  "completedAt": null,
+  "expiresAt": null,
+  "declinedReason": "fixture_declined_by_user",
+  "failureReason": null,
+  "isFixture": true
+}

@@ -22,6 +22,9 @@ const completeLiveEnv = {
   LINQ_API_KEY: "test-linq-api-key",
   PRAVA_API_BASE_URL: "https://prava.example.test",
   PRAVA_API_KEY: "test-prava-api-key",
+  PRAVA_CREATE_SESSION_ENDPOINT_TEMPLATE: "/sessions",
+  PRAVA_RESULT_ENDPOINT_TEMPLATE: "/sessions/{sessionId}",
+  PRAVA_REPORT_CHECKOUT_ENDPOINT_TEMPLATE: "/sessions/{sessionId}/checkout-outcome",
   N8N_API_BASE_URL: "https://n8n.example.test",
   N8N_API_KEY: "test-n8n-api-key"
 };
@@ -98,6 +101,39 @@ describe("runtime configuration", () => {
       expect(error).toBeInstanceOf(IntegrationError);
       expect((error as IntegrationError).safeMessage).toContain("SENSO_VERIFY_PROVIDER_URL");
       expect((error as IntegrationError).safeMessage).not.toContain("test-senso-api-key");
+    }
+  });
+
+  it("does not require a live Linq API key yet", () => {
+    const { LINQ_API_KEY: _linqApiKey, ...envWithoutLinqKey } = completeLiveEnv;
+    const config = loadRuntimeConfig(envWithoutLinqKey);
+
+    if (config.mode !== "live") {
+      throw new Error("Expected live config");
+    }
+
+    expect(config.integrations.linq.apiKey).toBeUndefined();
+  });
+
+  it("fails clearly when live mode lacks Prava endpoint templates", () => {
+    const {
+      PRAVA_CREATE_SESSION_ENDPOINT_TEMPLATE: _createEndpoint,
+      PRAVA_RESULT_ENDPOINT_TEMPLATE: _resultEndpoint,
+      PRAVA_REPORT_CHECKOUT_ENDPOINT_TEMPLATE: _reportEndpoint,
+      ...envWithoutPravaEndpoints
+    } = completeLiveEnv;
+
+    expect(() => loadRuntimeConfig(envWithoutPravaEndpoints)).toThrow(IntegrationError);
+
+    try {
+      loadRuntimeConfig(envWithoutPravaEndpoints);
+    } catch (error) {
+      expect(error).toBeInstanceOf(IntegrationError);
+      expect((error as IntegrationError).safeMessage).toContain(
+        "PRAVA_CREATE_SESSION_ENDPOINT_TEMPLATE"
+      );
+      expect((error as IntegrationError).safeMessage).toContain("PRAVA_RESULT_ENDPOINT_TEMPLATE");
+      expect((error as IntegrationError).safeMessage).not.toContain("test-prava-api-key");
     }
   });
 
@@ -254,6 +290,8 @@ describe("IntegrationError", () => {
     });
   });
 });
+
+
 
 
 

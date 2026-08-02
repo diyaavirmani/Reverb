@@ -8,12 +8,18 @@ import {
   CampaignIntentSchema,
   DecisionExplanationSchema,
   OpenAIQualityReviewSchema,
+  PravaCreateSessionResultSchema,
+  PravaPaymentResultSchema,
+  PravaReportCheckoutOutcomeResultSchema,
   SensoProviderVerificationSchema,
   type AuditEvent,
   type CampaignCreative,
   type CampaignIntent,
   type DecisionExplanation,
   type OpenAIQualityReview,
+  type PravaCreateSessionResult,
+  type PravaPaymentResult,
+  type PravaReportCheckoutOutcomeResult,
   type SensoProviderVerification
 } from "../../../schemas";
 import { IntegrationError } from "../errors";
@@ -22,11 +28,9 @@ import type {
   N8nStorageAdapter,
   OpenAIAdapter,
   PravaAdapter,
-  PravaAuthorizePaymentResult,
   SensoAdapter
 } from "../types";
 
-const fixtureNow = "2026-08-01T00:00:00.000Z";
 const sensoFixtureFiles = new Map<string, string>([
   [
     "provider_reach_local_dining:package_local_dining_boost",
@@ -40,6 +44,15 @@ const sensoFixtureFiles = new Map<string, string>([
     "provider_reach_premium_weekend:package_premium_weekend_push",
     "provider-c-late-or-cpa.json"
   ]
+]);
+
+const pravaResultFixtureFiles = new Map<string, string>([
+  ["fixture_prava_awaiting_user", "result-awaiting-user.json"],
+  ["fixture_prava_authorized", "result-authorized.json"],
+  ["fixture_prava_declined", "result-declined.json"],
+  ["fixture_prava_expired", "result-expired.json"],
+  ["fixture_prava_failed", "result-failed.json"],
+  ["fixture_prava_completed", "result-completed.json"]
 ]);
 
 export class FixtureOpenAIAdapter implements OpenAIAdapter {
@@ -141,14 +154,88 @@ export class FixtureLinqAdapter implements LinqAdapter {
 export class FixturePravaAdapter implements PravaAdapter {
   readonly mode = "fixture";
 
-  async authorizePayment(
-    request: Parameters<PravaAdapter["authorizePayment"]>[0]
-  ): Promise<PravaAuthorizePaymentResult> {
-    return {
-      authorizationId: `fixture_prava_${request.campaignId}_${request.idempotencyKey.slice(0, 8)}`,
-      expiresAt: "2026-08-01T00:15:00.000Z",
-      status: "AUTHORIZED"
-    };
+  constructor(private readonly fixtureDirectory = join(process.cwd(), "fixtures", "prava")) {}
+
+  async createSession(
+    request: Parameters<PravaAdapter["createSession"]>[0]
+  ): ReturnType<PravaAdapter["createSession"]> {
+    const fixture = await this.loadFixture(PravaCreateSessionResultSchema, "session-awaiting-user.json");
+
+    return PravaCreateSessionResultSchema.parse({
+      ...fixture,
+      campaignId: request.campaignId,
+      amountPaise: request.amountPaise,
+      currency: request.currency,
+      isFixture: true
+    });
+  }
+
+  async getPaymentResult(
+    request: Parameters<PravaAdapter["getPaymentResult"]>[0]
+  ): ReturnType<PravaAdapter["getPaymentResult"]> {
+    const fileName = pravaResultFixtureFiles.get(request.sessionId);
+
+    if (fileName === undefined) {
+      return PravaPaymentResultSchema.parse({
+        sessionId: request.sessionId,
+        campaignId: request.campaignId,
+        status: "FAILED",
+        currency: "INR",
+        amountPaise: 0,
+        authorizationId: null,
+        completedAt: null,
+        expiresAt: null,
+        declinedReason: null,
+        failureReason: "fixture_result_not_found",
+        isFixture: true
+      });
+    }
+
+    const fixture = await this.loadFixture(PravaPaymentResultSchema, fileName);
+
+    return PravaPaymentResultSchema.parse({
+      ...fixture,
+      campaignId: request.campaignId,
+      isFixture: true
+    });
+  }
+
+  async reportCheckoutOutcome(
+    request: Parameters<PravaAdapter["reportCheckoutOutcome"]>[0]
+  ): ReturnType<PravaAdapter["reportCheckoutOutcome"]> {
+    const fileName =
+      request.checkoutOutcome === "MERCHANT_ORDER_CREATED" ? "report-completed.json" : "report-failed.json";
+    const fixture = await this.loadFixture(PravaReportCheckoutOutcomeResultSchema, fileName);
+
+    return PravaReportCheckoutOutcomeResultSchema.parse({
+      ...fixture,
+      campaignId: request.campaignId,
+      sessionId: request.sessionId,
+      merchantOrderId: request.merchantOrderId,
+      isFixture: true
+    });
+  }
+
+  private async loadFixture<T>(schema: ZodType<T>, fileName: string): Promise<T> {
+    try {
+      const raw = await readFile(join(this.fixtureDirectory, fileName), "utf8");
+      return schema.parse(JSON.parse(stripByteOrderMark(raw)));
+    } catch (error) {
+      const isValidationError = error instanceof z.ZodError;
+
+      throw new IntegrationError({
+        integration: "prava",
+        operation: "loadFixture",
+        safeMessage: isValidationError
+          ? `Prava fixture ${fileName} failed schema validation.`
+          : `Prava fixture ${fileName} could not be loaded.`,
+        retryable: false,
+        cause: {
+          fileName,
+          error
+        }
+      });
+    }
   }
 }
 

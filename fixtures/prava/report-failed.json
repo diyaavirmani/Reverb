@@ -1,0 +1,8 @@
+﻿{
+  "campaignId": "campaign_demo_friday",
+  "sessionId": "fixture_prava_failed",
+  "received": true,
+  "status": "FAILED",
+  "merchantOrderId": null,
+  "isFixture": true
+}
