@@ -110,6 +110,7 @@ export const SpotSchema = z
     ownerId: nonEmptyStringSchema,
     name: nonEmptyStringSchema,
     category: z.enum(["CAFE", "RESTAURANT", "SALON", "STUDIO", "OTHER"]),
+    averageBookingValuePaise: PaiseSchema,
     timezone: nonEmptyStringSchema,
     address: addressSchema,
     createdAt: UtcDateTimeStringSchema,

@@ -3,6 +3,7 @@ import type {
   Campaign,
   CampaignAsset,
   CampaignOption,
+  CampaignPerformanceReport,
   MerchantOrder,
   PromotionPackage,
   PromotionProvider,
@@ -16,15 +17,7 @@ export type AuditEventFilters = {
   entityId?: string;
 };
 
-export type CampaignPerformance = {
-  campaignId: string;
-  targetReservations: number;
-  attributedReservations: number;
-  testReservations: number;
-  spendPaise: number;
-  expectedCpaPaise: number | null;
-  actualCpaPaise: number | null;
-};
+export type CampaignPerformance = CampaignPerformanceReport;
 
 export interface StorageRepository {
   getSpot(id: string): Promise<Spot | null>;

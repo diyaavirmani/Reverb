@@ -4,6 +4,7 @@
     "ownerId": "owner_diya_demo",
     "name": "Quiet Cup Cafe",
     "category": "CAFE",
+    "averageBookingValuePaise": 125000,
     "timezone": "Asia/Kolkata",
     "address": {
       "line1": "12 Market Road",

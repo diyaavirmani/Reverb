@@ -1,4 +1,4 @@
-﻿import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
@@ -41,6 +41,7 @@ const spotColumns = [
   "ownerId",
   "name",
   "category",
+  "averageBookingValuePaise",
   "timezone",
   "addressLine1",
   "addressLine2",
@@ -203,12 +204,13 @@ const sheetSpecs: SheetSpec[] = [
     requiredColumns: spotColumns,
     schema: SpotSchema,
     idColumn: "id",
-    moneyColumns: [],
-    mapRow: (row) => ({
+    moneyColumns: ["averageBookingValuePaise"],
+    mapRow: (row, context) => ({
       id: row.id,
       ownerId: row.ownerId,
       name: row.name,
       category: row.category,
+      averageBookingValuePaise: parseIntegerPaise(row, "averageBookingValuePaise", context),
       timezone: row.timezone,
       address: {
         line1: row.addressLine1,

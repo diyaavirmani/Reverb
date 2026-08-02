@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   AuditEventSchema,
   CampaignAssetSchema,
@@ -29,6 +29,7 @@ const spot = {
   ownerId: "owner_001",
   name: "Quiet Cup Cafe",
   category: "CAFE",
+  averageBookingValuePaise: 125000,
   timezone: "Asia/Kolkata",
   address: {
     line1: "12 Market Road",

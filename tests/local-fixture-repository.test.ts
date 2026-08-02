@@ -153,13 +153,16 @@ describe("LocalFixtureRepository", () => {
     await repository.saveReservation(reservation);
 
     await expect(repository.getCampaignPerformance(campaign.id)).resolves.toEqual({
-      campaignId: campaign.id,
+      initialUnusedCapacity: 12,
       targetReservations: 6,
-      attributedReservations: 1,
-      testReservations: 0,
-      spendPaise: 480000,
-      expectedCpaPaise: null,
-      actualCpaPaise: 480000
+      confirmedReservationCount: 1,
+      confirmedGuestCount: 2,
+      capacityRecoveryPercent: 16.67,
+      remainingCapacity: 10,
+      promotionSpendPaise: 480000,
+      actualCostPerReservationPaise: 480000,
+      estimatedRevenueRecoveredPaise: 250000,
+      campaignStatus: "DRAFT"
     });
   });
 });

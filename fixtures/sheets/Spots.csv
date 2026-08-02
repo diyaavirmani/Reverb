@@ -1,2 +1,2 @@
-﻿id,ownerId,name,category,timezone,addressLine1,addressLine2,addressCity,addressRegion,addressPostalCode,addressCountryCode,createdAt,updatedAt
-spot_quiet_cup_cafe,owner_diya_demo,Quiet Cup Cafe,CAFE,Asia/Kolkata,12 Market Road,,Bengaluru,KA,560001,IN,2026-08-01T00:00:00.000Z,2026-08-01T00:00:00.000Z
+id,ownerId,name,category,averageBookingValuePaise,timezone,addressLine1,addressLine2,addressCity,addressRegion,addressPostalCode,addressCountryCode,createdAt,updatedAt
+spot_quiet_cup_cafe,owner_diya_demo,Quiet Cup Cafe,CAFE,125000,Asia/Kolkata,12 Market Road,,Bengaluru,KA,560001,IN,2026-08-01T00:00:00.000Z,2026-08-01T00:00:00.000Z

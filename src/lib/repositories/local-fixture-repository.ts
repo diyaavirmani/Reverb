@@ -1,4 +1,4 @@
-﻿import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -101,6 +101,10 @@ function requireNoDuplicateId<T extends { id: string }>(
   if (records.some((record) => record.id === id)) {
     throw new Error(`Duplicate ${label} id: ${id}`);
   }
+}
+
+function roundPercent(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export class LocalFixtureRepository implements StorageRepository {
@@ -271,35 +275,53 @@ export class LocalFixtureRepository implements StorageRepository {
       return null;
     }
 
-    const [transactions, reservations, options] = await Promise.all([
+    const spot = await this.getSpot(campaign.spotId);
+
+    if (!spot) {
+      return null;
+    }
+
+    const [transactions, reservations] = await Promise.all([
       this.readRecords<Transaction>(fixtureFiles.transactions),
-      this.listReservations(campaignId),
-      this.getCampaignOptions(campaignId)
+      this.listReservations(campaignId)
     ]);
 
-    const completedSpendPaise = transactions
+    const confirmedReservations = reservations.filter(
+      (reservation) =>
+        !reservation.isTest &&
+        (reservation.status === "BOOKED" || reservation.status === "COMPLETED")
+    );
+    const confirmedReservationCount = confirmedReservations.length;
+    const confirmedGuestCount = confirmedReservations.reduce(
+      (total, reservation) => total + reservation.seatCount,
+      0
+    );
+    const promotionSpendPaise = transactions
       .filter((transaction) => transaction.campaignId === campaignId)
-      .filter((transaction) => transaction.status === "COMPLETED")
+      .filter(
+        (transaction) =>
+          transaction.status === "COMPLETED" && transaction.merchantOrderId !== null
+      )
       .reduce((total, transaction) => total + transaction.amountPaise, 0);
-    const attributedReservations = reservations.filter((reservation) => !reservation.isTest).length;
-    const testReservations = reservations.filter((reservation) => reservation.isTest).length;
-    const passingOptions = options.filter((option) => option.passesDeterministicChecks);
-    const expectedCpaPaise =
-      passingOptions.length === 0
-        ? null
-        : Math.min(...passingOptions.map((option) => option.expectedCpaPaise));
+    const remainingCapacity = Math.max(0, campaign.unusedCapacity - confirmedGuestCount);
+    const capacityRecoveryPercent = roundPercent(
+      (confirmedGuestCount / campaign.unusedCapacity) * 100
+    );
 
     return {
-      campaignId,
+      initialUnusedCapacity: campaign.unusedCapacity,
       targetReservations: campaign.targetReservations,
-      attributedReservations,
-      testReservations,
-      spendPaise: completedSpendPaise,
-      expectedCpaPaise,
-      actualCpaPaise:
-        attributedReservations === 0
+      confirmedReservationCount,
+      confirmedGuestCount,
+      capacityRecoveryPercent,
+      remainingCapacity,
+      promotionSpendPaise,
+      actualCostPerReservationPaise:
+        confirmedReservationCount === 0
           ? null
-          : Math.round(completedSpendPaise / attributedReservations)
+          : Math.round(promotionSpendPaise / confirmedReservationCount),
+      estimatedRevenueRecoveredPaise: confirmedGuestCount * spot.averageBookingValuePaise,
+      campaignStatus: campaign.status
     };
   }
 
