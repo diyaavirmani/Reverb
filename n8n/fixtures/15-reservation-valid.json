@@ -1,0 +1,20 @@
+{
+  "scenario": "valid visibly labelled demo reservation",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "customerName": "Demo Guest",
+    "customerContact": "demo@example.test",
+    "partySize": 2,
+    "reservationTime": "2026-08-07T14:00:00.000Z",
+    "trackingCode": "DEMO-TRACK-001",
+    "isDemoBooking": true
+  },
+  "expected": {
+    "httpStatus": 201,
+    "reservationStatus": "BOOKED",
+    "isTest": true,
+    "testLabel": "TEST RESERVATION - NOT A REAL CUSTOMER",
+    "storedThroughGateway": true,
+    "reportTrigger": "RESERVATION_UPDATE"
+  }
+}

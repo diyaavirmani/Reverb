@@ -11,7 +11,11 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "validate:fixtures": "tsx scripts/validate-fixtures.ts && tsx scripts/validate-sheet-templates.ts",
-        "validate:n8n": "tsx scripts/validate-n8n-workflows.ts"
+        "validate:n8n": "tsx scripts/validate-n8n-workflows.ts",
+        "tableau:build": "tsx scripts/build-tableau-dataset.ts",
+        "demo:reset": "tsx scripts/reset-demo.ts",
+        "demo:seed": "tsx scripts/seed-demo.ts",
+        "demo:verify": "tsx scripts/verify-demo-readiness.ts"
     },
     "dependencies": {
         "csv-parse": "^7.0.1",

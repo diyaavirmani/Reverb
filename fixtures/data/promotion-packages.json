@@ -15,7 +15,9 @@
     "validFrom": "2026-08-07T13:30:00.000Z",
     "validUntil": "2026-08-07T15:30:00.000Z",
     "verificationStatus": "VERIFIED",
-    "evidenceIds": ["evidence_local_dining_boost"],
+    "evidenceIds": [
+      "evidence_local_dining_boost"
+    ],
     "createdAt": "2026-08-01T00:00:00.000Z",
     "updatedAt": "2026-08-01T00:00:00.000Z"
   },
@@ -35,7 +37,9 @@
     "validFrom": "2026-08-07T13:30:00.000Z",
     "validUntil": "2026-08-07T15:30:00.000Z",
     "verificationStatus": "UNVERIFIED",
-    "evidenceIds": ["evidence_neighborhood_food_blast"],
+    "evidenceIds": [
+      "evidence_neighborhood_food_blast"
+    ],
     "createdAt": "2026-08-01T00:00:00.000Z",
     "updatedAt": "2026-08-01T00:00:00.000Z"
   },
@@ -55,7 +59,9 @@
     "validFrom": "2026-08-07T13:30:00.000Z",
     "validUntil": "2026-08-07T15:30:00.000Z",
     "verificationStatus": "VERIFIED",
-    "evidenceIds": ["evidence_premium_weekend_push"],
+    "evidenceIds": [
+      "evidence_premium_weekend_push"
+    ],
     "createdAt": "2026-08-01T00:00:00.000Z",
     "updatedAt": "2026-08-01T00:00:00.000Z"
   }

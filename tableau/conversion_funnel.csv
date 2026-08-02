@@ -1,0 +1,13 @@
+stage,count,stage_order
+Campaign created,0,1
+Provider verification,0,2
+Options ready,0,3
+Provider selected,0,4
+Creative generated,0,5
+Quality approved,0,6
+Owner approved,0,7
+Prava authorized,0,8
+Merchant order created,0,9
+Promotion active,0,10
+Reservation attributed,0,11
+Campaign completed,0,12

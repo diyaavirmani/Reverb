@@ -1,0 +1,51 @@
+{
+  "scenario": "anonymized campaign report payload",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "trigger": "CAMPAIGN_COMPLETION"
+  },
+  "expected": {
+    "driveFolder": "Reverb Fill/Campaigns/campaign_demo_001",
+    "artifactNames": [
+      "approved-creative.json",
+      "campaign-brief.txt",
+      "provider-comparison.html",
+      "transaction-summary.json",
+      "campaign-report.json"
+    ],
+    "metrics": {
+      "initialUnusedCapacity": 12,
+      "targetReservations": 6,
+      "confirmedReservationCount": 6,
+      "confirmedGuestCount": 12,
+      "capacityRecoveryPercent": 100,
+      "remainingCapacity": 0,
+      "promotionSpendPaise": 480000,
+      "actualCostPerReservationPaise": 80000,
+      "estimatedRevenueRecoveredPaise": 1500000,
+      "remainingBudgetPaise": 20000
+    },
+    "transactionSummary": {
+      "transactionId": "transaction_demo_001",
+      "merchantOrderId": "fixture_reach_order_001",
+      "status": "COMPLETED",
+      "orderStatus": "ACTIVE",
+      "currency": "INR",
+      "amountPaise": 480000
+    },
+    "reservationRecord": {
+      "reservationAt": "2026-08-07T14:00:00.000Z",
+      "seatCount": 2,
+      "status": "BOOKED",
+      "isDemoBooking": true,
+      "testLabel": "TEST RESERVATION - NOT A REAL CUSTOMER"
+    },
+    "excludedFields": [
+      "customerName",
+      "customerContact",
+      "customerReference",
+      "trackingCode",
+      "source"
+    ]
+  }
+}

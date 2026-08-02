@@ -1,0 +1,18 @@
+{
+  "scenario": "duplicate reservation tracking code is rejected",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "customerName": "Duplicate Test",
+    "customerContact": "duplicate@example.test",
+    "partySize": 2,
+    "reservationTime": "2026-08-07T14:00:00.000Z",
+    "trackingCode": "DEMO-TRACK-001",
+    "isDemoBooking": true
+  },
+  "expected": {
+    "httpStatus": 409,
+    "errorCode": "DUPLICATE_TRACKING_SUBMISSION",
+    "reservationStoredAgain": false,
+    "auditCreatedAgain": false
+  }
+}

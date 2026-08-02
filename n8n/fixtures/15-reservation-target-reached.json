@@ -1,0 +1,24 @@
+{
+  "scenario": "reservation reaches the campaign target",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "customerName": "Target Test",
+    "customerContact": "target@example.test",
+    "partySize": 2,
+    "reservationTime": "2026-08-07T14:00:00.000Z",
+    "trackingCode": "TARGET-REACHED-006",
+    "isDemoBooking": true,
+    "performanceAfterSubmission": {
+      "targetReservations": 6,
+      "confirmedReservationCount": 6,
+      "confirmedGuestCount": 12
+    }
+  },
+  "expected": {
+    "httpStatus": 201,
+    "milestone": "TARGET_REACHED",
+    "linqProgressSent": true,
+    "reportTriggered": true,
+    "testLabelMustRemainVisible": true
+  }
+}

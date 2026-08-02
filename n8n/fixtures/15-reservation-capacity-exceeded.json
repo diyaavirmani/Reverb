@@ -1,0 +1,18 @@
+{
+  "scenario": "reservation exceeds remaining campaign capacity",
+  "input": {
+    "campaignId": "campaign_demo_001",
+    "customerName": "Capacity Test",
+    "customerContact": "capacity@example.test",
+    "partySize": 13,
+    "reservationTime": "2026-08-07T14:00:00.000Z",
+    "trackingCode": "CAPACITY-OVER-001",
+    "isDemoBooking": true
+  },
+  "expected": {
+    "httpStatus": 409,
+    "errorCode": "CAPACITY_EXCEEDED",
+    "reservationStored": false,
+    "auditCreated": false
+  }
+}

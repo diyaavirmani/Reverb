@@ -1,0 +1,18 @@
+{
+  "scenario": "reservation is rejected for an inactive campaign",
+  "input": {
+    "campaignId": "campaign_inactive_001",
+    "customerName": "Inactive Test",
+    "customerContact": "inactive@example.test",
+    "partySize": 2,
+    "reservationTime": "2026-08-07T14:00:00.000Z",
+    "trackingCode": "INACTIVE-001",
+    "isDemoBooking": true
+  },
+  "expected": {
+    "httpStatus": 409,
+    "errorCode": "CAMPAIGN_NOT_ACTIVE",
+    "reservationStored": false,
+    "auditCreated": false
+  }
+}

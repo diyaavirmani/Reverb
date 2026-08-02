@@ -24,7 +24,9 @@ describe("n8n business workflows", () => {
     ["11-provider-discovery.json", "Reverb Fill - Provider Discovery"],
     ["12-creative-quality.json", "Reverb Fill - Creative Quality"],
     ["13-prava-transaction.json", "Reverb Fill - Prava Transaction"],
-    ["14-promotion-activation.json", "Reverb Fill - Promotion Activation"]
+    ["14-promotion-activation.json", "Reverb Fill - Promotion Activation"],
+    ["15-reservation-performance.json", "Reverb Fill - Reservation Performance"],
+    ["16-campaign-reporting.json", "Reverb Fill - Campaign Reporting"]
   ])("keeps %s importable and inactive", (file, name) => {
     const workflow = readWorkflow(file);
 
@@ -161,6 +163,69 @@ describe("n8n business workflows", () => {
     expect(
       hasPath(workflow, "Activation URL Exists?", "Prepare Activation Failed Status", 1)
     ).toBe(true);
+  });
+
+  it("covers reservation outcomes and keeps demo bookings visibly labelled", () => {
+    const valid = readFixture("15-reservation-valid.json");
+    const target = readFixture("15-reservation-target-reached.json");
+    const failures = [
+      readFixture("15-reservation-capacity-exceeded.json"),
+      readFixture("15-reservation-inactive-campaign.json"),
+      readFixture("15-reservation-duplicate-tracking.json")
+    ];
+    const workflow = readWorkflow("15-reservation-performance.json");
+    const milestoneCode = nodeCode(workflow, "Calculate Progress Milestone");
+    const savedReservationCode = nodeCode(workflow, "Validate Saved Reservation");
+
+    expect(valid.input.isDemoBooking).toBe(true);
+    expect(valid.expected.testLabel).toContain("TEST");
+    expect(target.expected.milestone).toBe("TARGET_REACHED");
+    expect(failures.map((fixture) => fixture.expected.errorCode)).toEqual([
+      "CAPACITY_EXCEEDED",
+      "CAMPAIGN_NOT_ACTIVE",
+      "DUPLICATE_TRACKING_SUBMISSION"
+    ]);
+    expect(savedReservationCode).toContain("Demo reservation must remain visibly labelled");
+    expect(milestoneCode).toContain("FIRST_RESERVATION");
+    expect(milestoneCode).toContain("HALF_TARGET_REACHED");
+    expect(milestoneCode).toContain("TARGET_REACHED");
+    expect(hasPath(workflow, "Create Reservation Through API", "Save Reservation Through Storage"))
+      .toBe(true);
+    expect(hasPath(workflow, "Load Updated Campaign Performance", "Trigger Campaign Reporting"))
+      .toBe(true);
+  });
+
+  it("builds anonymized reporting artifacts and sends one owner report", () => {
+    const fixture = readFixture("16-campaign-report-payload.json");
+    const workflow = readWorkflow("16-campaign-reporting.json");
+    const reportCode = nodeCode(workflow, "Build Sanitized Campaign Report");
+    const artifactCode = nodeCode(workflow, "Prepare Safe Report Artifacts");
+
+    expect(fixture.expected.driveFolder).toBe(
+      "Reverb Fill/Campaigns/campaign_demo_001"
+    );
+    expect(fixture.expected.artifactNames).toHaveLength(5);
+    expect(fixture.expected.excludedFields).toEqual([
+      "customerName",
+      "customerContact",
+      "customerReference",
+      "trackingCode",
+      "source"
+    ]);
+    for (const artifactName of fixture.expected.artifactNames as string[]) {
+      expect(artifactCode).toContain(artifactName);
+    }
+    expect(reportCode).toContain("!item.isTest");
+    expect(reportCode).toContain("safeReservations");
+    expect(reportCode).toContain("transactionSummary");
+    expect(workflow.nodes.filter((node) => node.type === "n8n-nodes-base.gmail"))
+      .toHaveLength(1);
+    expect(workflow.nodes.filter((node) => node.type === "n8n-nodes-base.googleDrive").length)
+      .toBeGreaterThanOrEqual(7);
+    expect(hasPath(workflow, "Load Report Records", "Build Sanitized Campaign Report"))
+      .toBe(true);
+    expect(hasPath(workflow, "Build Sanitized Campaign Report", "Email Report To Spot Owner"))
+      .toBe(true);
   });
 });
 

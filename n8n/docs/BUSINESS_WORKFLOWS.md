@@ -19,6 +19,7 @@ The business workflows use these n8n environment variables:
 - `N8N_CREATIVE_WEBHOOK_URL`
 - `N8N_TRANSACTION_WEBHOOK_URL`
 - `N8N_ACTIVATION_WEBHOOK_URL`
+- `N8N_RESERVATION_WEBHOOK_URL`
 - `N8N_REPORT_WEBHOOK_URL`
 - `N8N_MAX_PRAVA_POLLS`
 - `REVERB_FILL_SHEET_ID`
@@ -159,6 +160,34 @@ Fixtures:
 
 - `n8n/fixtures/14-promotion-activation-success.json`
 - `n8n/fixtures/14-promotion-activation-failure.json`
+
+## 15 - Reservation Performance
+
+File: `n8n/workflows/15-reservation-performance.json`
+
+1. A signed webhook receives a future booking-page submission and rejects stale or invalid signatures.
+2. Strict validation requires campaign, customer, positive party size, UTC reservation time, tracking code, and explicit demo status.
+3. `POST /api/reservations` enforces active campaign, slot, capacity, and duplicate-tracking rules.
+4. The returned reservation is saved through workflow `05`. Demo bookings must retain `isTest=true` and a visible `TEST` label.
+5. The workflow reloads campaign performance, updates the `Campaigns` sheet metrics, and creates a reservation audit event.
+6. Linq sends one concise update for the first reservation, the first crossing of 50% of target, or target completion.
+7. A signed `RESERVATION_UPDATE` event triggers workflow `16`.
+
+Fixtures cover valid, capacity-exceeded, inactive, duplicate-tracking, and target-reached outcomes under `n8n/fixtures/15-reservation-*.json`.
+
+## 16 - Campaign Reporting
+
+File: `n8n/workflows/16-campaign-reporting.json`
+
+1. The signed webhook accepts activation, reservation-update, and campaign-completion triggers.
+2. Batched signed storage requests load the campaign, options, selected provider and package, asset, transaction, merchant order, reservations, and audit events.
+3. A deterministic Code node calculates capacity recovery, spend, real reservations, actual CPA, estimated recovered revenue, and remaining budget using integer paise.
+4. Demo bookings remain labelled but are excluded from performance totals.
+5. Campaign metrics and a sanitized owner-summary asset are appended or updated in Google Sheets.
+6. Google Drive nodes locate or create `Reverb Fill/Campaigns/{campaignId}` and upload five report artifacts.
+7. Gmail sends one aggregate report to the Spot owner.
+
+Shared artifacts exclude customer names, contact details, tracking identifiers, raw audit metadata, and all payment credentials. Setup and allowlists are documented in `GOOGLE_SETUP.md` and `ANONYMISATION_RULES.md`.
 
 ## Validation And Import
 
