@@ -168,7 +168,7 @@ describe("reservation tracking API", () => {
 
     const response = await getPerformance(
       new Request(`http://localhost/api/campaigns/${activeCampaign.id}/performance`),
-      { params: { campaignId: activeCampaign.id } }
+      { params: Promise.resolve({ campaignId: activeCampaign.id }) }
     );
     const performance = CampaignPerformanceReportSchema.parse(await response.json());
 

@@ -5,7 +5,7 @@ import { createReservationService, reservationFailure } from "../../../reservati
 export const runtime = "nodejs";
 
 type RouteContext = {
-  params: Promise<{ campaignId: string }> | { campaignId: string };
+  params: Promise<{ campaignId: string }>;
 };
 
 export async function GET(_request: Request, context: RouteContext) {

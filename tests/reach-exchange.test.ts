@@ -152,7 +152,7 @@ describe("Reverb Reach Exchange API", () => {
   it("delivers approved creative and activates only after delivery", async () => {
     const checkoutResponse = await checkout(jsonRequest("/api/reach/checkout", checkoutRequest));
     const checkoutResult = ReachCheckoutResultSchema.parse(await checkoutResponse.json());
-    const context = { params: { orderId: checkoutResult.orderId } };
+    const context = { params: Promise.resolve({ orderId: checkoutResult.orderId }) };
 
     const earlyActivationResponse = await activateOrder(
       jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/activate`, {
@@ -216,7 +216,7 @@ describe("Reverb Reach Exchange API", () => {
       })
     );
     const checkoutResult = ReachCheckoutResultSchema.parse(await checkoutResponse.json());
-    const context = { params: { orderId: checkoutResult.orderId } };
+    const context = { params: Promise.resolve({ orderId: checkoutResult.orderId }) };
     const deliveryRequest = {
       approvedCreative: "Identical approved creative.",
       campaignBrief: "Identical campaign brief.",
@@ -250,7 +250,7 @@ describe("Reverb Reach Exchange API", () => {
       })
     );
     const checkoutResult = ReachCheckoutResultSchema.parse(await checkoutResponse.json());
-    const context = { params: { orderId: checkoutResult.orderId } };
+    const context = { params: Promise.resolve({ orderId: checkoutResult.orderId }) };
     const idempotencyKey = "idem_reach_delivery_conflict";
 
     await deliverOrder(
@@ -286,7 +286,7 @@ describe("Reverb Reach Exchange API", () => {
       })
     );
     const checkoutResult = ReachCheckoutResultSchema.parse(await checkoutResponse.json());
-    const context = { params: { orderId: checkoutResult.orderId } };
+    const context = { params: Promise.resolve({ orderId: checkoutResult.orderId }) };
     await deliverOrder(
       jsonRequest(`/api/reach/orders/${checkoutResult.orderId}/deliver`, {
         approvedCreative: "Activation retry creative.",
@@ -331,8 +331,8 @@ describe("Reverb Reach Exchange API", () => {
     );
     const firstOrder = ReachCheckoutResultSchema.parse(await firstCheckoutResponse.json());
     const secondOrder = ReachCheckoutResultSchema.parse(await secondCheckoutResponse.json());
-    const firstContext = { params: { orderId: firstOrder.orderId } };
-    const secondContext = { params: { orderId: secondOrder.orderId } };
+    const firstContext = { params: Promise.resolve({ orderId: firstOrder.orderId }) };
+    const secondContext = { params: Promise.resolve({ orderId: secondOrder.orderId }) };
 
     await deliverOrder(
       jsonRequest(`/api/reach/orders/${firstOrder.orderId}/deliver`, {

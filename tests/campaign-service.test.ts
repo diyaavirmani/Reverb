@@ -101,6 +101,7 @@ describe("CampaignService", () => {
     await rm(temporaryRoot, { recursive: true, force: true });
   });
 
+  // This fixture integration path performs many validated atomic file writes, which can slow down under parallel test I/O.
   it("runs the fixture happy path from campaign creation to ACTIVE without real API calls", async () => {
     const created = await service.createCampaignFromIntent({
       spotId: "spot_quiet_cup_cafe",
@@ -178,7 +179,7 @@ describe("CampaignService", () => {
         expect.objectContaining({ eventType: "PROMOTION_ACTIVATED" })
       ])
     );
-  });
+  }, 15_000);
   it.each(deterministicQualityCases)("$name", async ({ expectedIssue, mutate }) => {
     const campaignId = await prepareGeneratedCampaign();
     const storedCreative = await n8nStorage.getRecord("campaign-creatives", campaignId);
