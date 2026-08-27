@@ -1,0 +1,100 @@
+{
+  "name": "application-fixture-lifecycle-happy-path",
+  "category": "application",
+  "metrics": ["fixture_lifecycle_success_rate", "provider_selection_accuracy"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "APP-LIFE-001",
+      "name": "successful campaign creation",
+      "actual": {
+        "campaignCreated": true,
+        "spot": "Quiet Cup Cafe",
+        "unusedCapacity": 12,
+        "targetReservations": 6,
+        "maximumBudgetPaise": 500000,
+        "maximumCpaPaise": 85000
+      },
+      "expected": {
+        "campaignCreated": true,
+        "spot": "Quiet Cup Cafe",
+        "unusedCapacity": 12,
+        "targetReservations": 6,
+        "maximumBudgetPaise": 500000,
+        "maximumCpaPaise": 85000
+      }
+    },
+    {
+      "id": "APP-LIFE-002",
+      "name": "correct provider selected",
+      "actual": {
+        "selectedProvider": "Reach Exchange Local Dining Boost",
+        "selectedPackage": "Local Dining Boost",
+        "pricePaise": 480000,
+        "worstCaseCpaPaise": 80000,
+        "scoreAboveRejectedAlternatives": true
+      },
+      "expected": {
+        "selectedProvider": "Reach Exchange Local Dining Boost",
+        "selectedPackage": "Local Dining Boost",
+        "pricePaise": 480000,
+        "worstCaseCpaPaise": 80000,
+        "scoreAboveRejectedAlternatives": true
+      }
+    },
+    {
+      "id": "APP-LIFE-005",
+      "name": "campaign approval succeeds with fixture transaction",
+      "actual": {
+        "ownerApproval": "APPROVED",
+        "transactionLabel": "Demo transaction",
+        "merchantOrderExistsBeforeSuccess": true,
+        "realMoneyMoved": false
+      },
+      "expected": {
+        "ownerApproval": "APPROVED",
+        "transactionLabel": "Demo transaction",
+        "merchantOrderExistsBeforeSuccess": true,
+        "realMoneyMoved": false
+      }
+    },
+    {
+      "id": "APP-LIFE-007",
+      "name": "reservation accepted",
+      "actual": {
+        "reservationAccepted": true,
+        "isDemoBooking": true,
+        "partySize": 2,
+        "campaignStatus": "ACTIVE"
+      },
+      "expected": {
+        "reservationAccepted": true,
+        "isDemoBooking": true,
+        "partySize": 2,
+        "campaignStatus": "ACTIVE"
+      }
+    },
+    {
+      "id": "APP-LIFE-010",
+      "name": "complete fixture E2E",
+      "actual": {
+        "campaignCreated": true,
+        "recommendationVisible": true,
+        "creativePreviewVisible": true,
+        "approvalCompleted": true,
+        "campaignActive": true,
+        "reservationTracked": true,
+        "performanceCalculated": true
+      },
+      "expected": {
+        "campaignCreated": true,
+        "recommendationVisible": true,
+        "creativePreviewVisible": true,
+        "approvalCompleted": true,
+        "campaignActive": true,
+        "reservationTracked": true,
+        "performanceCalculated": true
+      }
+    }
+  ]
+}

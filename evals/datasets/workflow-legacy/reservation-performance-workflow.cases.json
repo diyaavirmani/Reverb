@@ -1,0 +1,13 @@
+{
+  "name": "reservation-performance-workflow",
+  "category": "workflow",
+  "metrics": ["reservation_acceptance_rate", "duplicate_block_rate", "metric_recalculation_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-RES-001", "name": "active campaign accepts demo reservation", "expected": { "accepted": true, "isDemoBooking": true } },
+    { "id": "WF-RES-002", "name": "inactive campaign rejects", "expected": { "accepted": false } },
+    { "id": "WF-RES-003", "name": "duplicate tracking rejected", "expected": { "accepted": false } },
+    { "id": "WF-RES-004", "name": "capacity cannot exceed unused capacity", "expected": { "accepted": false } },
+    { "id": "WF-RES-005", "name": "performance metrics recalculated", "expected": { "recalculated": true } }
+  ]
+}

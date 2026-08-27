@@ -1,0 +1,40 @@
+{
+  "name": "reservation-performance",
+  "category": "workflow",
+  "metrics": ["reservation_success_rate", "capacity_guard_rate", "duplicate_reservation_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "WF-RESERVATION-001",
+      "name": "valid reservation",
+      "input": {
+        "campaignId": "EVAL-CAMPAIGN-ACTIVE",
+        "customerName": "Demo Guest",
+        "customerContact": "demo@example.test",
+        "partySize": 2,
+        "reservationTime": "2026-08-07T14:00:00.000Z",
+        "trackingCode": "EVAL-TRACKING-001",
+        "isDemoBooking": true
+      },
+      "expected": { "ok": true, "workflow": "reservation-performance" }
+    },
+    {
+      "id": "WF-RESERVATION-002",
+      "name": "inactive campaign rejected",
+      "input": { "campaignId": "EVAL-CAMPAIGN-INACTIVE" },
+      "expected": { "ok": false, "code": "CAMPAIGN_NOT_ACTIVE" }
+    },
+    {
+      "id": "WF-RESERVATION-003",
+      "name": "duplicate reservation rejected",
+      "input": { "campaignId": "EVAL-CAMPAIGN-ACTIVE", "trackingCode": "EVAL-TRACKING-DUPLICATE" },
+      "expected": { "ok": false, "code": "DUPLICATE_TRACKING_CODE" }
+    },
+    {
+      "id": "WF-RESERVATION-004",
+      "name": "over capacity rejected",
+      "input": { "campaignId": "EVAL-CAMPAIGN-ACTIVE", "partySize": 99 },
+      "expected": { "ok": false, "code": "CAPACITY_EXCEEDED" }
+    }
+  ]
+}

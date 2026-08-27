@@ -1,0 +1,20 @@
+{
+  "name": "payment-safety",
+  "category": "component",
+  "metrics": ["payment_safety_pass_rate", "duplicate_payment_block_rate", "credential_persistence_rate", "unsafe_success_report_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "PAY-001", "name": "approval required before payment", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "PAY-002", "name": "expired approval rejected", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "PAY-003", "name": "amount cannot exceed budget", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "PAY-004", "name": "merchant cannot change after approval", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "PAY-005", "name": "package cannot change after approval", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "PAY-006", "name": "one-time credential never persisted", "actual": { "credentialPersisted": false }, "expected": { "credentialPersisted": false } },
+    { "id": "PAY-007", "name": "duplicate checkout blocked", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "PAY-008", "name": "timeout does not blindly retry", "actual": { "blindRetry": false }, "expected": { "blindRetry": false } },
+    { "id": "PAY-009", "name": "provider failure marks safe failure", "actual": { "safeFailure": true }, "expected": { "safeFailure": true } },
+    { "id": "PAY-010", "name": "success cannot precede merchant order", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "PAY-011", "name": "Prava report uses safe idempotency key", "actual": { "safeIdempotencyKey": true }, "expected": { "safeIdempotencyKey": true } },
+    { "id": "PAY-012", "name": "no secret leakage in records", "actual": { "secretLeakage": false }, "expected": { "secretLeakage": false } }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "commerce",
+  "category": "workflow",
+  "metrics": ["commerce_success_rate", "payment_guard_rate", "idempotency_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "WF-COMMERCE-001",
+      "name": "approved transaction",
+      "input": { "ownerApproval": true, "approvedAmountPaise": 480000, "maximumBudgetPaise": 500000 },
+      "expected": { "ok": true, "workflow": "commerce" }
+    },
+    {
+      "id": "WF-COMMERCE-002",
+      "name": "over budget rejected",
+      "input": { "ownerApproval": true, "approvedAmountPaise": 550000, "maximumBudgetPaise": 500000 },
+      "expected": { "ok": false, "code": "BUDGET_EXCEEDED" }
+    },
+    {
+      "id": "WF-COMMERCE-003",
+      "name": "duplicate checkout blocked",
+      "input": { "request_id": "EVAL-COMMERCE-DUPLICATE-001", "ownerApproval": true, "approvedAmountPaise": 480000, "maximumBudgetPaise": 500000 },
+      "expected": { "duplicateSafe": true }
+    },
+    {
+      "id": "WF-COMMERCE-004",
+      "name": "invalid campaign state rejected",
+      "input": { "ownerApproval": true, "campaignStatus": "DRAFT", "approvedAmountPaise": 480000, "maximumBudgetPaise": 500000 },
+      "expected": { "ok": false, "code": "INVALID_CAMPAIGN_STATUS" }
+    },
+    {
+      "id": "WF-COMMERCE-005",
+      "name": "fixture transaction failure is controlled",
+      "input": { "ownerApproval": true, "forceFixtureFailure": true, "approvedAmountPaise": 480000, "maximumBudgetPaise": 500000 },
+      "expected": { "ok": false, "code": "COMMERCE_FAILED" }
+    }
+  ]
+}

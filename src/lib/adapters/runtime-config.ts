@@ -6,6 +6,22 @@ const optionalStringSchema = z.string().optional();
 const optionalUrlSchema = z.union([z.literal(""), z.string().url()]).optional();
 const optionalEmailSchema = z.union([z.literal(""), z.string().email()]).optional();
 
+const fixtureModeSchema = z
+  .object({
+    USE_FIXTURES: z.enum(["true", "false"]).default("true")
+  })
+  .passthrough();
+
+const linqWebhookFixtureSchema = z
+  .object({
+    USE_FIXTURES: z.enum(["true", "false"]).default("true"),
+    APP_ENV: optionalStringSchema,
+    LINQ_WEBHOOK_SECRET: optionalStringSchema,
+    N8N_INTAKE_WEBHOOK_URL: optionalStringSchema,
+    N8N_INTERNAL_SECRET: optionalStringSchema
+  })
+  .passthrough();
+
 const envSchema = z
   .object({
     USE_FIXTURES: z.enum(["true", "false"]).default("true"),
@@ -145,14 +161,16 @@ const liveRequiredKeys = [
 ] as const satisfies readonly (keyof ParsedEnv)[];
 
 export function loadRuntimeConfig(env: RuntimeEnv = process.env): RuntimeConfig {
-  const parsedEnv = parseEnvironment(env, "loadRuntimeConfig", "Runtime configuration is invalid.");
+  const fixtureMode = parseFixtureMode(env, "loadRuntimeConfig");
 
-  if (parsedEnv.USE_FIXTURES === "true") {
+  if (fixtureMode.USE_FIXTURES === "true") {
     return {
       useFixtures: true,
       mode: "fixture"
     };
   }
+
+  const parsedEnv = parseEnvironment(env, "loadRuntimeConfig", "Runtime configuration is invalid.");
 
   const missingKeys = liveRequiredKeys.filter((key) => isBlank(parsedEnv[key]));
 
@@ -259,11 +277,11 @@ export type LinqWebhookRuntimeConfig = {
 export function loadLinqWebhookConfig(
   env: RuntimeEnv = process.env
 ): LinqWebhookRuntimeConfig {
-  const parsedEnv = parseEnvironment(
-    env,
-    "loadLinqWebhookConfig",
-    "Linq webhook configuration is invalid."
-  );
+  const fixtureMode = parseFixtureMode(env, "loadLinqWebhookConfig");
+  const parsedEnv =
+    fixtureMode.USE_FIXTURES === "true"
+      ? parseLinqWebhookFixtureEnvironment(env)
+      : parseEnvironment(env, "loadLinqWebhookConfig", "Linq webhook configuration is invalid.");
   const appEnvironment = blankToUndefined(parsedEnv.APP_ENV) ?? env.NODE_ENV;
 
   return {
@@ -274,6 +292,53 @@ export function loadLinqWebhookConfig(
     n8nIntakeWebhookUrl: blankToUndefined(parsedEnv.N8N_INTAKE_WEBHOOK_URL),
     n8nInternalSecret: blankToUndefined(parsedEnv.N8N_INTERNAL_SECRET)
   };
+}
+
+function parseFixtureMode(
+  env: RuntimeEnv,
+  operation: "loadRuntimeConfig" | "loadLinqWebhookConfig"
+): z.infer<typeof fixtureModeSchema> {
+  const parsedEnv = fixtureModeSchema.safeParse(env);
+
+  if (!parsedEnv.success) {
+    throw new IntegrationError({
+      integration: "runtimeConfig",
+      operation,
+      safeMessage: "Runtime configuration is invalid.",
+      retryable: false,
+      cause: {
+        issues: parsedEnv.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message
+        }))
+      }
+    });
+  }
+
+  return parsedEnv.data;
+}
+
+function parseLinqWebhookFixtureEnvironment(
+  env: RuntimeEnv
+): z.infer<typeof linqWebhookFixtureSchema> {
+  const parsedEnv = linqWebhookFixtureSchema.safeParse(env);
+
+  if (!parsedEnv.success) {
+    throw new IntegrationError({
+      integration: "runtimeConfig",
+      operation: "loadLinqWebhookConfig",
+      safeMessage: "Linq webhook configuration is invalid.",
+      retryable: false,
+      cause: {
+        issues: parsedEnv.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message
+        }))
+      }
+    });
+  }
+
+  return parsedEnv.data;
 }
 
 function parseEnvironment(

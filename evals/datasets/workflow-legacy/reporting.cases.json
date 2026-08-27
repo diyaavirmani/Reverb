@@ -1,0 +1,14 @@
+{
+  "name": "reporting",
+  "category": "workflow",
+  "metrics": ["report_generation_rate", "privacy_rate", "failure_isolation_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-REPORT-001", "name": "report loads campaign summary", "expected": { "loaded": true } },
+    { "id": "WF-REPORT-002", "name": "report excludes secrets", "expected": { "secretLeakage": false } },
+    { "id": "WF-REPORT-003", "name": "Drive folder created or simulated", "expected": { "createdOrSimulated": true } },
+    { "id": "WF-REPORT-004", "name": "Gmail report sent or simulated", "expected": { "sentOrSimulated": true } },
+    { "id": "WF-REPORT-005", "name": "Tableau export generated or simulated", "expected": { "generatedOrSimulated": true } },
+    { "id": "WF-REPORT-006", "name": "Gmail failure does not corrupt campaign state", "expected": { "stateCorrupted": false } }
+  ]
+}

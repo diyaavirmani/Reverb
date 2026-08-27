@@ -1,0 +1,44 @@
+{
+  "name": "application-fixture-lifecycle-regression",
+  "category": "application",
+  "metrics": ["metrics_regression_rate", "deployment_readiness_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "APP-LIFE-009",
+      "name": "performance metrics calculated",
+      "actual": {
+        "campaignStatus": "ACTIVE",
+        "confirmedReservationCount": 1,
+        "confirmedGuestCount": 2,
+        "remainingCapacity": 10,
+        "capacityRecoveryPercent": 16.67,
+        "estimatedRevenueRecoveredPaise": 250000
+      },
+      "expected": {
+        "campaignStatus": "ACTIVE",
+        "confirmedReservationCount": 1,
+        "confirmedGuestCount": 2,
+        "remainingCapacity": 10,
+        "capacityRecoveryPercent": 16.67,
+        "estimatedRevenueRecoveredPaise": 250000
+      }
+    },
+    {
+      "id": "APP-REG-001",
+      "name": "minimum deployment variables stay fixture-first",
+      "actual": {
+        "minimumUseFixtures": true,
+        "minimumAppEnv": "production",
+        "paidProviderKeysMandatory": false,
+        "n8nDeploymentBlocker": false
+      },
+      "expected": {
+        "minimumUseFixtures": true,
+        "minimumAppEnv": "production",
+        "paidProviderKeysMandatory": false,
+        "n8nDeploymentBlocker": false
+      }
+    }
+  ]
+}

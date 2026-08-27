@@ -1,0 +1,80 @@
+{
+  "name": "campaign-orchestrator",
+  "category": "workflow",
+  "metrics": ["campaign_orchestration_rate", "constraint_validation_rate", "provider_selection_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "WF-CAMPAIGN-001",
+      "name": "happy path creates recommendation",
+      "input": {
+        "emptySeats": 12,
+        "date": "Friday",
+        "startTime": "19:00",
+        "endTime": "21:00",
+        "targetReservations": 6,
+        "budgetPaise": 500000,
+        "maxDiscountPercent": 15,
+        "maxCpaPaise": 85000
+      },
+      "expected": { "ok": true, "workflow": "campaign-orchestrator" }
+    },
+    {
+      "id": "WF-CAMPAIGN-002",
+      "name": "missing constraint returns controlled failure",
+      "input": {
+        "emptySeats": 12,
+        "date": "Friday",
+        "startTime": "19:00",
+        "endTime": "21:00"
+      },
+      "expected": { "ok": false, "code": "MISSING_CONSTRAINT" }
+    },
+    {
+      "id": "WF-CAMPAIGN-003",
+      "name": "no valid provider returns safe result",
+      "input": {
+        "emptySeats": 12,
+        "date": "Friday",
+        "startTime": "19:00",
+        "endTime": "21:00",
+        "targetReservations": 6,
+        "budgetPaise": 10000,
+        "maxDiscountPercent": 15,
+        "maxCpaPaise": 1000
+      },
+      "expected": { "ok": false, "code": "NO_VALID_PROVIDER" }
+    },
+    {
+      "id": "WF-CAMPAIGN-004",
+      "name": "budget rejection",
+      "input": {
+        "emptySeats": 12,
+        "date": "Friday",
+        "startTime": "19:00",
+        "endTime": "21:00",
+        "targetReservations": 6,
+        "budgetPaise": 10000,
+        "maxDiscountPercent": 15,
+        "maxCpaPaise": 85000
+      },
+      "expected": { "ok": false, "code": "BUDGET_EXCEEDED" }
+    },
+    {
+      "id": "WF-CAMPAIGN-005",
+      "name": "duplicate request remains idempotent",
+      "input": {
+        "request_id": "EVAL-CAMPAIGN-DUPLICATE-001",
+        "emptySeats": 12,
+        "date": "Friday",
+        "startTime": "19:00",
+        "endTime": "21:00",
+        "targetReservations": 6,
+        "budgetPaise": 500000,
+        "maxDiscountPercent": 15,
+        "maxCpaPaise": 85000
+      },
+      "expected": { "duplicateSafe": true }
+    }
+  ]
+}

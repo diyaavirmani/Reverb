@@ -13,27 +13,19 @@ import type { AssertionCase, EvalCaseResult, EvalDataset, EvalSuiteResult } from
 import { assertEvalEnvironment, exitForSuites, isMainModule, readDatasets, statusLine } from "./shared";
 
 const suiteAliases: Record<string, string> = {
-  "storage-gateway": "storage-gateway",
-  "campaign-intake": "campaign-intake",
-  "provider-discovery": "provider-discovery",
-  "creative-quality": "creative-quality-workflow",
-  "creative-quality-workflow": "creative-quality-workflow",
-  "prava-transaction": "prava-transaction",
-  "promotion-activation": "promotion-activation",
-  "reservation-performance": "reservation-performance-workflow",
-  "reservation-performance-workflow": "reservation-performance-workflow",
+  "campaign-orchestrator": "campaign-orchestrator",
+  campaign: "campaign-orchestrator",
+  commerce: "commerce",
+  "reservation-performance": "reservation-performance",
+  reservation: "reservation-performance",
   reporting: "reporting"
 };
 
 const workflowUrlByDataset: Record<string, string> = {
-  "storage-gateway": "N8N_STORAGE_WEBHOOK_URL",
-  "campaign-intake": "N8N_INTAKE_WEBHOOK_URL",
-  "provider-discovery": "N8N_CAMPAIGN_WEBHOOK_URL",
-  "creative-quality-workflow": "N8N_CAMPAIGN_WEBHOOK_URL",
-  "prava-transaction": "N8N_CAMPAIGN_WEBHOOK_URL",
-  "promotion-activation": "N8N_CAMPAIGN_WEBHOOK_URL",
-  "reservation-performance-workflow": "N8N_CAMPAIGN_WEBHOOK_URL",
-  reporting: "N8N_REPORT_WEBHOOK_URL"
+  "campaign-orchestrator": "N8N_CAMPAIGN_URL",
+  commerce: "N8N_COMMERCE_URL",
+  "reservation-performance": "N8N_RESERVATION_URL",
+  reporting: "N8N_REPORT_URL"
 };
 
 export type WorkflowEvalOptions = {

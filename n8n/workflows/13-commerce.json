@@ -1,0 +1,95 @@
+{
+  "name": "Reverb Fill - 13 Commerce",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/commerce",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000001",
+      "name": "Receive Commerce Approval",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-840, 0],
+      "webhookId": "13000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nreturn [{ json: { payload: { ...body, ownerApproval: body.ownerApproval ?? true, ownerMessage: body.ownerMessage ?? 'Fill Friday 7-9 PM with 12 unused seats, target 6 reservations, budget Rs 5,000, maximum discount 15%, and maximum CPA Rs 850.', spotId: body.spotId ?? $env.DEMO_SPOT_ID } } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000002",
+      "name": "Normalize Commerce Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-620, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.APP_URL || 'http://127.0.0.1:3000') + '/api/demo/commerce' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.payload }}",
+        "options": {}
+      },
+      "id": "13000000-0000-4000-8000-000000000003",
+      "name": "Call Commerce Stage API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json;\nif (!result || result.transactionStatus !== 'COMPLETED' || typeof result.merchantOrderId !== 'string') {\n  return [{ json: { ok: false, workflow: 'commerce', status: 'failed', data: {}, errors: [{ code: result?.code ?? 'COMMERCE_STAGE_FAILED', message: result?.error ?? 'Commerce stage did not create a completed merchant order' }] } }];\n}\nreturn [{ json: { ok: true, workflow: 'commerce', status: 'completed', data: { campaignId: result.campaignId, transactionStatus: result.transactionStatus, merchantOrderId: result.merchantOrderId, activationStatus: result.activationStatus, publicActivationUrl: result.publicActivationUrl, demoTransaction: result.demoTransaction === true }, errors: [] } }];"
+      },
+      "id": "13000000-0000-4000-8000-000000000004",
+      "name": "Format Commerce Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.ok ? 200 : 400 }}"
+        }
+      },
+      "id": "13000000-0000-4000-8000-000000000005",
+      "name": "Respond Commerce Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [100, 0]
+    }
+  ],
+  "connections": {
+    "Receive Commerce Approval": {
+      "main": [[{ "node": "Normalize Commerce Request", "type": "main", "index": 0 }]]
+    },
+    "Normalize Commerce Request": {
+      "main": [[{ "node": "Call Commerce Stage API", "type": "main", "index": 0 }]]
+    },
+    "Call Commerce Stage API": {
+      "main": [[{ "node": "Format Commerce Response", "type": "main", "index": 0 }]]
+    },
+    "Format Commerce Response": {
+      "main": [[{ "node": "Respond Commerce Result", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "versionId": "13000000-0000-4000-8000-000000000999",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

@@ -1,0 +1,13 @@
+{
+  "name": "promotion-activation",
+  "category": "workflow",
+  "metrics": ["activation_rate", "idempotency_rate", "failure_audit_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-ACTIVATION-001", "name": "activation requires paid order", "expected": { "requiresPaidOrder": true } },
+    { "id": "WF-ACTIVATION-002", "name": "activation creates URL", "expected": { "activationUrl": true } },
+    { "id": "WF-ACTIVATION-003", "name": "campaign becomes active", "expected": { "status": "ACTIVE" } },
+    { "id": "WF-ACTIVATION-004", "name": "duplicate activation idempotent", "expected": { "duplicateSafe": true } },
+    { "id": "WF-ACTIVATION-005", "name": "activation failure creates audit", "expected": { "auditEvent": true } }
+  ]
+}

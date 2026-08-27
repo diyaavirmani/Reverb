@@ -47,29 +47,43 @@ Never place Google keys, OAuth refresh data, or service-account JSON in the repo
 
 ## Supported Operations
 
-| Operation | Sheet | Behavior |
-| --- | --- | --- |
-| `create_campaign` | `Campaigns` | Append validated campaign |
-| `get_campaign` | `Campaigns` | Lookup by `id` |
-| `update_campaign` | `Campaigns` | Update using matching `id` |
-| `list_providers` | `Providers` | Read all providers |
-| `list_packages` | `Promotion_Packages` | Read all packages |
-| `save_campaign_options` | `Campaign_Options` | Append or update each option by `id` |
-| `get_campaign_options` | `Campaign_Options` | Lookup by `campaignId` |
-| `save_campaign_asset` | `Campaign_Assets` | Append or update by `id` |
-| `get_campaign_asset` | `Campaign_Assets` | Lookup first match by `campaignId` |
-| `save_transaction` | `Transactions` | Append or update by `id`, excluding authorization material |
-| `get_transaction` | `Transactions` | Lookup first match by `campaignId` |
-| `save_merchant_order` | `Merchant_Orders` | Append or update by `id` |
-| `get_merchant_order` | `Merchant_Orders` | Lookup by `id` |
-| `save_reservation` | `Reservations` | Append or update by `id` |
-| `list_reservations` | `Reservations` | Lookup by `campaignId` |
-| `append_audit_event` | `Audit_Log` | Append one immutable event |
-| `list_audit_events` | `Audit_Log` | Lookup by campaign `entityId` |
+The Switch output is zero-based. Its output order is part of the workflow contract so each operation remains connected to the intended Google Sheets node.
+
+| Output | Operation | Sheet tab | Behavior |
+| ---: | --- | --- | --- |
+| 0 | `create_campaign` | `Campaigns` | Append validated campaign |
+| 1 | `get_campaign` | `Campaigns` | Lookup by `id` |
+| 2 | `update_campaign` | `Campaigns` | Update using matching `id` |
+| 3 | `list_providers` | `Providers` | Read all providers |
+| 4 | `list_packages` | `Promotion_Packages` | Read all packages |
+| 5 | `save_campaign_options` | `Campaign_Options` | Append or update each option by `id` |
+| 6 | `get_campaign_options` | `Campaign_Options` | Lookup by `campaignId` |
+| 7 | `save_campaign_asset` | `Campaign_Assets` | Append or update by `id` |
+| 8 | `get_campaign_asset` | `Campaign_Assets` | Lookup first match by `campaignId` |
+| 9 | `save_transaction` | `Transactions` | Append or update by `id`, excluding authorization material |
+| 10 | `get_transaction` | `Transactions` | Lookup first match by `campaignId` |
+| 11 | `save_merchant_order` | `Merchant_Orders` | Append or update by `id` |
+| 12 | `get_merchant_order` | `Merchant_Orders` | Lookup by `id` |
+| 13 | `save_reservation` | `Reservations` | Append or update by `id` |
+| 14 | `list_reservations` | `Reservations` | Lookup by `campaignId` |
+| 15 | `append_audit_event` | `Audit_Log` | Append one immutable event |
+| 16 | `list_audit_events` | `Audit_Log` | Lookup by campaign `entityId` |
+
+An unmatched operation uses the separate fallback output and does not enter a Google Sheets branch.
 
 ## Request Contract
 
 The caller serializes the JSON body, creates a Unix-seconds timestamp, and calculates lowercase hex HMAC-SHA256 over `<timestamp>.<serialized body>`.
+
+Every request uses this shape. `data` contains the validated row or lookup fields required by the selected operation.
+
+```json
+{
+  "operation": "<supported_operation>",
+  "request_id": "<stable-idempotency-id>",
+  "data": {}
+}
+```
 
 Headers:
 
@@ -116,7 +130,7 @@ Lookup example body:
 }
 ```
 
-Success response:
+Success responses use this shape:
 
 ```json
 {
@@ -126,6 +140,8 @@ Success response:
   "data": {}
 }
 ```
+
+`data` is an object or `null` for single-record operations and an array for list operations. The response preserves the incoming `operation` and `request_id`.
 
 ## Error Behaviour
 

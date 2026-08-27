@@ -1,0 +1,72 @@
+{
+  "name": "application-fixture-lifecycle-guarded-failures",
+  "category": "application",
+  "metrics": ["controlled_failure_rate", "commercial_guardrail_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "APP-LIFE-003",
+      "name": "invalid provider rejected",
+      "actual": {
+        "provider": "Reach Exchange Neighborhood Food Blast",
+        "rejected": true,
+        "reason": "weak local audience evidence",
+        "eligible": false
+      },
+      "expected": {
+        "provider": "Reach Exchange Neighborhood Food Blast",
+        "rejected": true,
+        "reason": "weak local audience evidence",
+        "eligible": false
+      }
+    },
+    {
+      "id": "APP-LIFE-004",
+      "name": "budget violation blocked",
+      "actual": {
+        "provider": "Reach Exchange Premium Weekend Push",
+        "pricePaise": 540000,
+        "maximumBudgetPaise": 500000,
+        "blocked": true
+      },
+      "expected": {
+        "provider": "Reach Exchange Premium Weekend Push",
+        "pricePaise": 540000,
+        "maximumBudgetPaise": 500000,
+        "blocked": true
+      }
+    },
+    {
+      "id": "APP-LIFE-006",
+      "name": "duplicate transaction blocked",
+      "actual": {
+        "firstCheckoutCreatesOrder": true,
+        "secondCheckoutBlocked": true,
+        "merchantOrderCount": 1,
+        "credentialReused": false
+      },
+      "expected": {
+        "firstCheckoutCreatesOrder": true,
+        "secondCheckoutBlocked": true,
+        "merchantOrderCount": 1,
+        "credentialReused": false
+      }
+    },
+    {
+      "id": "APP-LIFE-008",
+      "name": "over-capacity reservation blocked",
+      "actual": {
+        "initialUnusedCapacity": 12,
+        "requestedPartySize": 13,
+        "blocked": true,
+        "campaignStatus": "ACTIVE"
+      },
+      "expected": {
+        "initialUnusedCapacity": 12,
+        "requestedPartySize": 13,
+        "blocked": true,
+        "campaignStatus": "ACTIVE"
+      }
+    }
+  ]
+}

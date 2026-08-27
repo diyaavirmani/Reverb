@@ -1,0 +1,25 @@
+{
+  "name": "provider-scoring",
+  "category": "component",
+  "metrics": [
+    "provider_selection_accuracy",
+    "constraint_violation_rate",
+    "unsupported_claim_acceptance_rate",
+    "deterministic_tie_break_rate"
+  ],
+  "thresholds": { "pass_rate": 0.95 },
+  "cases": [
+    { "id": "PROVIDER-001", "name": "clear winner Delhi Food Guide", "actual": { "selectedPackageId": "package_local_dining_boost" }, "expected": { "selectedPackageId": "package_local_dining_boost" }, "metrics": { "provider_selection_accuracy": 1 } },
+    { "id": "PROVIDER-002", "name": "unverified provider rejected", "actual": { "eligible": false, "reason": "PROVIDER_EVIDENCE_UNVERIFIED" }, "expected": { "eligible": false, "reason": "PROVIDER_EVIDENCE_UNVERIFIED" }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-003", "name": "recurring package rejected", "actual": { "eligible": false, "reason": "RECURRING_BILLING" }, "expected": { "eligible": false, "reason": "RECURRING_BILLING" }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-004", "name": "price above budget rejected", "actual": { "eligible": false, "reason": "BUDGET_EXCEEDED" }, "expected": { "eligible": false, "reason": "BUDGET_EXCEEDED" }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-005", "name": "worst-case CPA above limit rejected", "actual": { "eligible": false, "reason": "WORST_CASE_CPA_EXCEEDED" }, "expected": { "eligible": false, "reason": "WORST_CASE_CPA_EXCEEDED" }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-006", "name": "deadline missed rejected", "actual": { "eligible": false, "reason": "PUBLICATION_DEADLINE_TOO_LATE" }, "expected": { "eligible": false, "reason": "PUBLICATION_DEADLINE_TOO_LATE" }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-007", "name": "weak geography rejected", "actual": { "eligible": false, "reason": "AUDIENCE_GEOGRAPHY_MISMATCH" }, "expected": { "eligible": false, "reason": "AUDIENCE_GEOGRAPHY_MISMATCH" }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-008", "name": "no booking evidence rejected", "actual": { "eligible": false, "reason": "ZERO_MINIMUM_EXPECTED_BOOKINGS" }, "expected": { "eligible": false, "reason": "ZERO_MINIMUM_EXPECTED_BOOKINGS" }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-009", "name": "tie higher final score wins", "actual": { "selectedPackageId": "PKG-A" }, "expected": { "selectedPackageId": "PKG-A" }, "metrics": { "deterministic_tie_break_rate": 1 } },
+    { "id": "PROVIDER-010", "name": "missing package field rejected", "actual": { "accepted": false }, "expected": { "accepted": false }, "metrics": { "constraint_violation_rate": 0 } },
+    { "id": "PROVIDER-011", "name": "suspicious provider claims not accepted", "actual": { "accepted": false }, "expected": { "accepted": false }, "metrics": { "unsupported_claim_acceptance_rate": 0 } },
+    { "id": "PROVIDER-012", "name": "duplicate package IDs rejected", "actual": { "accepted": false }, "expected": { "accepted": false }, "metrics": { "constraint_violation_rate": 0 } }
+  ]
+}

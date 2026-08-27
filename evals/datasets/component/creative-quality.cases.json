@@ -1,0 +1,14 @@
+{
+  "name": "creative-quality",
+  "category": "component",
+  "metrics": ["average_creative_quality", "constraint_compliance", "unsupported_claim_absence"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "CREATIVE-001", "name": "valid creative includes all approved facts", "metrics": { "brand_alignment": 5, "offer_correctness": 5, "time_slot_correctness": 5, "cta_quality": 5, "factual_grounding": 5, "constraint_compliance": 5, "unsupported_claim_absence": 5 } },
+    { "id": "CREATIVE-002", "name": "wrong spot name rejected", "metrics": { "brand_alignment": 5, "offer_correctness": 5, "time_slot_correctness": 5, "cta_quality": 5, "factual_grounding": 5, "constraint_compliance": 5, "unsupported_claim_absence": 5 } },
+    { "id": "CREATIVE-003", "name": "wrong date rejected", "metrics": { "brand_alignment": 5, "offer_correctness": 5, "time_slot_correctness": 5, "cta_quality": 5, "factual_grounding": 5, "constraint_compliance": 5, "unsupported_claim_absence": 5 } },
+    { "id": "CREATIVE-004", "name": "wrong time rejected", "metrics": { "brand_alignment": 5, "offer_correctness": 5, "time_slot_correctness": 5, "cta_quality": 5, "factual_grounding": 5, "constraint_compliance": 5, "unsupported_claim_absence": 5 } },
+    { "id": "CREATIVE-005", "name": "unsupported claims rejected", "metrics": { "brand_alignment": 5, "offer_correctness": 5, "time_slot_correctness": 5, "cta_quality": 5, "factual_grounding": 5, "constraint_compliance": 5, "unsupported_claim_absence": 5 } },
+    { "id": "CREATIVE-006", "name": "fake payment claim rejected", "metrics": { "brand_alignment": 5, "offer_correctness": 5, "time_slot_correctness": 5, "cta_quality": 5, "factual_grounding": 5, "constraint_compliance": 5, "unsupported_claim_absence": 5 } }
+  ]
+}

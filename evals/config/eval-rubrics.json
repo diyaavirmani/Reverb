@@ -1,0 +1,19 @@
+{
+  "creative_quality": {
+    "dimensions": {
+      "brand_alignment": "Copy matches a polished local dining campaign and the Spot tone.",
+      "offer_correctness": "Offer and discount match the approved campaign constraints.",
+      "time_slot_correctness": "Date and time slot are accurate.",
+      "cta_quality": "Call to action is specific and actionable.",
+      "factual_grounding": "All claims are grounded in campaign, provider, and evidence records.",
+      "constraint_compliance": "Budget, CPA, discount, package, and deadline constraints are obeyed.",
+      "unsupported_claim_absence": "No fake scarcity, reviews, popularity, guarantees, or payment claims."
+    },
+    "scale": "0 to 5",
+    "pass": {
+      "average_creative_quality": 4,
+      "constraint_compliance": 5,
+      "unsupported_claim_absence": 5
+    }
+  }
+}

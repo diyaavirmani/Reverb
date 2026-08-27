@@ -1,0 +1,14 @@
+{
+  "name": "creative-quality-workflow",
+  "category": "workflow",
+  "metrics": ["creative_created_rate", "quality_rejection_rate", "approval_ready_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-CREATIVE-001", "name": "creative created for selected package", "expected": { "created": true } },
+    { "id": "WF-CREATIVE-002", "name": "valid creative passes", "expected": { "passed": true } },
+    { "id": "WF-CREATIVE-003", "name": "wrong spot rejected", "expected": { "rejected": true } },
+    { "id": "WF-CREATIVE-004", "name": "wrong date or time rejected", "expected": { "rejected": true } },
+    { "id": "WF-CREATIVE-005", "name": "unsupported claims rejected", "expected": { "rejected": true } },
+    { "id": "WF-CREATIVE-006", "name": "campaign moves to owner approval", "expected": { "status": "AWAITING_OWNER_APPROVAL" } }
+  ]
+}

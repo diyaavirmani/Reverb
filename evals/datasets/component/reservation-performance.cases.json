@@ -1,0 +1,17 @@
+{
+  "name": "reservation-performance",
+  "category": "component",
+  "metrics": ["reservation_acceptance_rate", "capacity_rule_pass_rate", "performance_calculation_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "RES-001", "name": "active campaign accepts reservation", "actual": { "accepted": true }, "expected": { "accepted": true } },
+    { "id": "RES-002", "name": "inactive campaign rejects reservation", "actual": { "accepted": false }, "expected": { "accepted": false } },
+    { "id": "RES-003", "name": "duplicate tracking code rejected", "actual": { "accepted": false }, "expected": { "accepted": false } },
+    { "id": "RES-004", "name": "over capacity reservation rejected", "actual": { "accepted": false }, "expected": { "accepted": false } },
+    { "id": "RES-005", "name": "party size validation", "actual": { "accepted": false }, "expected": { "accepted": false } },
+    { "id": "RES-006", "name": "actual CPA calculation", "actual": { "actualCpaPaise": 480000 }, "expected": { "actualCpaPaise": 480000 } },
+    { "id": "RES-007", "name": "capacity recovered calculation", "actual": { "capacityRecoveryPercent": 16.67 }, "expected": { "capacityRecoveryPercent": 16.67 } },
+    { "id": "RES-008", "name": "remaining capacity calculation", "actual": { "remainingCapacity": 10 }, "expected": { "remainingCapacity": 10 } },
+    { "id": "RES-009", "name": "estimated revenue recovered calculation", "actual": { "estimatedRevenueRecoveredPaise": 240000 }, "expected": { "estimatedRevenueRecoveredPaise": 240000 } }
+  ]
+}

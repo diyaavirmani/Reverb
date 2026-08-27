@@ -1,0 +1,15 @@
+{
+  "name": "campaign-intake",
+  "category": "workflow",
+  "metrics": ["campaign_created_rate", "duplicate_block_rate", "missing_field_question_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-INTAKE-001", "name": "valid owner message creates campaign", "input": { "ownerMessage": "I have 12 empty seats this Friday from 7 PM to 9 PM. Target 6 reservations. Budget is Rs 5000. Max discount 15%. Max CPA Rs 850." }, "expected": { "campaignCreated": true } },
+    { "id": "WF-INTAKE-002", "name": "duplicate event does not create duplicate campaign", "expected": { "duplicateBlocked": true } },
+    { "id": "WF-INTAKE-003", "name": "missing fields stored in conversation state", "expected": { "conversationStateUpdated": true } },
+    { "id": "WF-INTAKE-004", "name": "vague message asks one question", "expected": { "oneQuestionAsked": true } },
+    { "id": "WF-INTAKE-005", "name": "invalid budget blocked", "expected": { "blocked": true } },
+    { "id": "WF-INTAKE-006", "name": "APP_URL unreachable controlled error", "expected": { "controlledError": true }, "tags": ["regression"] },
+    { "id": "WF-INTAKE-007", "name": "storage webhook missing controlled error", "expected": { "controlledError": true }, "tags": ["regression"] }
+  ]
+}

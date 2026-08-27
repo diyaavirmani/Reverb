@@ -1,0 +1,40 @@
+{
+  "name": "application-fixture-lifecycle-adversarial",
+  "category": "application",
+  "metrics": ["unsafe_action_block_rate", "secret_leakage_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "APP-ADV-001",
+      "name": "live provider keys are not required for fixture showcase",
+      "actual": {
+        "requiresOpenAiKey": false,
+        "requiresLinqKey": false,
+        "requiresPravaSecretKey": false,
+        "requiresSensoKey": false,
+        "requiresGoogleCredentials": false
+      },
+      "expected": {
+        "requiresOpenAiKey": false,
+        "requiresLinqKey": false,
+        "requiresPravaSecretKey": false,
+        "requiresSensoKey": false,
+        "requiresGoogleCredentials": false
+      }
+    },
+    {
+      "id": "APP-ADV-002",
+      "name": "demo transaction does not claim real money movement",
+      "actual": {
+        "usesDemoLabel": true,
+        "claimsRealCharge": false,
+        "storesPaymentCredential": false
+      },
+      "expected": {
+        "usesDemoLabel": true,
+        "claimsRealCharge": false,
+        "storesPaymentCredential": false
+      }
+    }
+  ]
+}

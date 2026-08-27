@@ -1,0 +1,19 @@
+{
+  "name": "prava-transaction",
+  "category": "workflow",
+  "metrics": ["payment_safety_rate", "checkout_once_rate", "credential_redaction_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-PRAVA-001", "name": "owner approval accepted", "expected": { "accepted": true } },
+    { "id": "WF-PRAVA-002", "name": "fixture session created", "expected": { "fixture": true } },
+    { "id": "WF-PRAVA-003", "name": "payment fixture authorized", "expected": { "status": "AUTHORIZED" } },
+    { "id": "WF-PRAVA-004", "name": "Reach checkout called once", "expected": { "checkoutCalls": 1 } },
+    { "id": "WF-PRAVA-005", "name": "merchant order created", "expected": { "merchantOrderExists": true } },
+    { "id": "WF-PRAVA-006", "name": "duplicate checkout blocked", "expected": { "blocked": true } },
+    { "id": "WF-PRAVA-007", "name": "price change blocked", "expected": { "blocked": true } },
+    { "id": "WF-PRAVA-008", "name": "timeout handled safely", "expected": { "safeFailure": true } },
+    { "id": "WF-PRAVA-009", "name": "success not reported before merchant order", "expected": { "blocked": true } },
+    { "id": "WF-PRAVA-010", "name": "safe failure report idempotency", "expected": { "safeIdempotencyKey": true } },
+    { "id": "WF-PRAVA-011", "name": "no credential persisted", "expected": { "credentialPersisted": false } }
+  ]
+}

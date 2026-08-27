@@ -1,0 +1,244 @@
+{
+  "name": "Reverb Fill - Reservation Performance",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "reverb/reservation-performance", "responseMode": "responseNode", "options": {} },
+      "id": "15000000-0000-4000-8000-000000000001",
+      "name": "Receive Reservation Submission",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-2300, 0],
+      "webhookId": "15000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst headers = $json.headers ?? {};\nconst timestamp = headers['x-reverb-timestamp'];\nconst received_signature = headers['x-reverb-signature'];\nif (typeof timestamp !== 'string' || typeof received_signature !== 'string') throw new Error('Signed reservation request required');\nconst timestampMs = /^\\d+$/.test(timestamp) ? Number(timestamp) * 1000 : Number.NaN;\nif (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 300000) throw new Error('Request timestamp is stale');\nreturn [{ json: { body, timestamp, received_signature, body_json: JSON.stringify(body) } }];"
+      },
+      "id": "15000000-0000-4000-8000-000000000002",
+      "name": "Normalize Signed Reservation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-2080, 0]
+    },
+    {
+      "parameters": { "action": "hmac", "type": "SHA256", "value": "={{ $json.timestamp + '.' + $json.body_json }}", "dataPropertyName": "expected_signature", "secret": "={{ $env.N8N_INTERNAL_SECRET }}" },
+      "id": "15000000-0000-4000-8000-000000000003",
+      "name": "Calculate Reservation Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [-1860, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const received = String($json.received_signature).replace(/^sha256=/, '');\nif (!/^[a-f0-9]{64}$/i.test(received) || received.toLowerCase() !== String($json.expected_signature).toLowerCase()) throw new Error('Invalid internal request signature');\nconst input = $json.body;\nfor (const field of ['campaignId','customerName','customerContact','reservationTime','trackingCode']) if (typeof input[field] !== 'string' || input[field].trim() === '') throw new Error(field + ' is required');\nif (!Number.isInteger(input.partySize) || input.partySize <= 0) throw new Error('partySize must be a positive integer');\nif (typeof input.isDemoBooking !== 'boolean') throw new Error('isDemoBooking must be boolean');\nif (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$/.test(input.reservationTime) || !Number.isFinite(Date.parse(input.reservationTime))) throw new Error('reservationTime must be an ISO-8601 UTC timestamp');\nreturn [{ json: input }];"
+      },
+      "id": "15000000-0000-4000-8000-000000000004",
+      "name": "Verify And Validate Submission",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1640, 0]
+    },
+    {
+      "parameters": { "method": "POST", "url": "={{ $env.APP_URL + '/api/reservations' }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json }}", "options": {} },
+      "id": "15000000-0000-4000-8000-000000000005",
+      "name": "Create Reservation Through API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1420, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const reservation = $json.reservation;\nif (!reservation || typeof reservation.id !== 'string' || reservation.id.trim() === '') throw new Error('Reservation API did not return a reservation');\nconst input = $('Verify And Validate Submission').item.json;\nif (reservation.campaignId !== input.campaignId || !Number.isInteger(reservation.seatCount) || reservation.seatCount !== input.partySize) throw new Error('Reservation API returned inconsistent data');\nif (input.isDemoBooking && (reservation.isTest !== true || typeof reservation.testLabel !== 'string' || !reservation.testLabel.includes('TEST'))) throw new Error('Demo reservation must remain visibly labelled');\nreturn [{ json: { reservation } }];"
+      },
+      "id": "15000000-0000-4000-8000-000000000006",
+      "name": "Validate Saved Reservation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const reservation = $json.reservation;\nconst storage_body = { operation: 'save_reservation', request_id: 'reservation:save:' + reservation.id, data: reservation };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "15000000-0000-4000-8000-000000000007",
+      "name": "Prepare Reservation Storage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-980, 0]
+    },
+    {
+      "parameters": { "action": "hmac", "type": "SHA256", "value": "={{ $json.timestamp + '.' + $json.storage_json }}", "dataPropertyName": "storage_signature", "secret": "={{ $env.N8N_INTERNAL_SECRET }}" },
+      "id": "15000000-0000-4000-8000-000000000008",
+      "name": "Reservation Storage Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [-760, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.storage_body }}", "options": {}, "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-reverb-timestamp", "value": "={{ $json.timestamp }}" }, { "name": "x-reverb-signature", "value": "={{ 'sha256=' + $json.storage_signature }}" }] }
+      },
+      "id": "15000000-0000-4000-8000-000000000009",
+      "name": "Save Reservation Through Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-540, 0]
+    },
+    {
+      "parameters": { "url": "={{ $env.APP_URL + '/api/campaigns/' + $('Verify And Validate Submission').item.json.campaignId + '/performance' }}", "options": {} },
+      "id": "15000000-0000-4000-8000-000000000010",
+      "name": "Load Updated Campaign Performance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $json;\nfor (const field of ['initialUnusedCapacity','targetReservations','confirmedReservationCount','confirmedGuestCount','remainingCapacity','promotionSpendPaise','estimatedRevenueRecoveredPaise']) if (!Number.isInteger(p[field]) || p[field] < 0) throw new Error('Invalid performance field: ' + field);\nif (typeof p.capacityRecoveryPercent !== 'number' || p.capacityRecoveryPercent < 0 || p.capacityRecoveryPercent > 100) throw new Error('Invalid capacity recovery percentage');\nif (p.actualCostPerReservationPaise !== null && (!Number.isInteger(p.actualCostPerReservationPaise) || p.actualCostPerReservationPaise < 0)) throw new Error('Invalid actual CPA');\nconst halfTarget = Math.ceil(p.targetReservations / 2);\nlet milestone = null;\nif (p.confirmedReservationCount >= p.targetReservations) milestone = 'TARGET_REACHED';\nelse if (p.confirmedReservationCount === 1) milestone = 'FIRST_RESERVATION';\nelse if (p.confirmedReservationCount >= halfTarget && p.confirmedReservationCount - 1 < halfTarget) milestone = 'HALF_TARGET_REACHED';\nreturn [{ json: { performance: p, milestone, campaignMetricRow: { id: $('Verify And Validate Submission').item.json.campaignId, confirmedReservationCount: p.confirmedReservationCount, confirmedGuestCount: p.confirmedGuestCount, capacityRecoveryPercent: p.capacityRecoveryPercent, remainingCapacity: p.remainingCapacity, promotionSpendPaise: p.promotionSpendPaise, actualCostPerReservationPaise: p.actualCostPerReservationPaise ?? '', estimatedRevenueRecoveredPaise: p.estimatedRevenueRecoveredPaise, metricsUpdatedAt: new Date().toISOString() } } }];"
+      },
+      "id": "15000000-0000-4000-8000-000000000011",
+      "name": "Calculate Progress Milestone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-100, 0]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "value": "={{ $env.REVERB_FILL_SHEET_ID }}", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Campaigns", "mode": "name" },
+        "columns": { "mappingMode": "defineBelow", "value": "={{ $json.campaignMetricRow }}", "matchingColumns": ["id"], "schema": [{ "id": "id", "displayName": "id", "type": "string", "canBeUsedToMatch": true, "defaultMatch": true, "display": true, "required": true, "removed": false }], "attemptToConvertTypes": false, "convertFieldsToString": false },
+        "options": {}
+      },
+      "id": "15000000-0000-4000-8000-000000000012",
+      "name": "Update Campaign Metrics In Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [120, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const reservation = $('Validate Saved Reservation').item.json.reservation;\nconst progress = $('Calculate Progress Milestone').item.json;\nconst storage_body = { operation: 'append_audit_event', request_id: 'reservation:audit:' + reservation.id, data: { campaign_id: reservation.campaignId, event_type: 'RESERVATION_RECORDED', description: reservation.isTest ? 'Labelled demo reservation recorded' : 'Tracked reservation recorded', idempotencyKey: 'reservation-workflow:' + reservation.id, metadata: { reservationId: reservation.id, partySize: reservation.seatCount, isDemoBooking: reservation.isTest, testLabel: reservation.testLabel, confirmedReservationCount: progress.performance.confirmedReservationCount, confirmedGuestCount: progress.performance.confirmedGuestCount } } };\nreturn [{ json: { storage_body, storage_json: JSON.stringify(storage_body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "15000000-0000-4000-8000-000000000013",
+      "name": "Prepare Reservation Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 0]
+    },
+    {
+      "parameters": { "action": "hmac", "type": "SHA256", "value": "={{ $json.timestamp + '.' + $json.storage_json }}", "dataPropertyName": "storage_signature", "secret": "={{ $env.N8N_INTERNAL_SECRET }}" },
+      "id": "15000000-0000-4000-8000-000000000014",
+      "name": "Reservation Audit Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [560, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $env.N8N_STORAGE_WEBHOOK_URL }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.storage_body }}", "options": {}, "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-reverb-timestamp", "value": "={{ $json.timestamp }}" }, { "name": "x-reverb-signature", "value": "={{ 'sha256=' + $json.storage_signature }}" }] }
+      },
+      "id": "15000000-0000-4000-8000-000000000015",
+      "name": "Create Reservation Audit Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 0]
+    },
+    {
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 }, "conditions": [{ "id": "15000000-0000-4000-8000-000000000716", "leftValue": "={{ $('Calculate Progress Milestone').item.json.milestone !== null }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }], "combinator": "and" },
+        "options": {}
+      },
+      "id": "15000000-0000-4000-8000-000000000016",
+      "name": "Progress Milestone Reached?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1000, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $env.APP_URL + '/api/linq/send' }}", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ { recipient: $env.DEMO_OWNER_EMAIL, text: $('Calculate Progress Milestone').item.json.milestone === 'TARGET_REACHED' ? 'Reservation target reached: ' + $('Calculate Progress Milestone').item.json.performance.confirmedReservationCount + ' confirmed reservations.' : $('Calculate Progress Milestone').item.json.milestone === 'HALF_TARGET_REACHED' ? 'Campaign progress: 50% of the reservation target is now confirmed.' : 'The first tracked reservation has been recorded.', idempotencyKey: 'reservation-progress:' + $('Verify And Validate Submission').item.json.campaignId + ':' + $('Calculate Progress Milestone').item.json.milestone } }}",
+        "options": {}
+      },
+      "id": "15000000-0000-4000-8000-000000000017",
+      "name": "Send Linq Progress Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, -180],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = { campaignId: $('Verify And Validate Submission').item.json.campaignId, trigger: 'RESERVATION_UPDATE' };\nreturn [{ json: { report_body: body, report_json: JSON.stringify(body), timestamp: Math.floor(Date.now() / 1000).toString() } }];"
+      },
+      "id": "15000000-0000-4000-8000-000000000018",
+      "name": "Prepare Reporting Trigger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 0]
+    },
+    {
+      "parameters": { "action": "hmac", "type": "SHA256", "value": "={{ $json.timestamp + '.' + $json.report_json }}", "dataPropertyName": "report_signature", "secret": "={{ $env.N8N_INTERNAL_SECRET }}" },
+      "id": "15000000-0000-4000-8000-000000000019",
+      "name": "Reporting Trigger Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [1660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $env.N8N_REPORT_WEBHOOK_URL }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.report_body }}", "options": {}, "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-reverb-timestamp", "value": "={{ $json.timestamp }}" }, { "name": "x-reverb-signature", "value": "={{ 'sha256=' + $json.report_signature }}" }] }
+      },
+      "id": "15000000-0000-4000-8000-000000000020",
+      "name": "Trigger Campaign Reporting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1880, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { accepted: true, reservationId: $('Validate Saved Reservation').item.json.reservation.id, isDemoBooking: $('Validate Saved Reservation').item.json.reservation.isTest, testLabel: $('Validate Saved Reservation').item.json.reservation.testLabel, performance: $('Calculate Progress Milestone').item.json.performance } }}",
+        "options": { "responseCode": 201 }
+      },
+      "id": "15000000-0000-4000-8000-000000000021",
+      "name": "Return Reservation Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [2100, 0]
+    }
+  ],
+  "connections": {
+    "Receive Reservation Submission": { "main": [[{ "node": "Normalize Signed Reservation", "type": "main", "index": 0 }]] },
+    "Normalize Signed Reservation": { "main": [[{ "node": "Calculate Reservation Signature", "type": "main", "index": 0 }]] },
+    "Calculate Reservation Signature": { "main": [[{ "node": "Verify And Validate Submission", "type": "main", "index": 0 }]] },
+    "Verify And Validate Submission": { "main": [[{ "node": "Create Reservation Through API", "type": "main", "index": 0 }]] },
+    "Create Reservation Through API": { "main": [[{ "node": "Validate Saved Reservation", "type": "main", "index": 0 }]] },
+    "Validate Saved Reservation": { "main": [[{ "node": "Prepare Reservation Storage", "type": "main", "index": 0 }]] },
+    "Prepare Reservation Storage": { "main": [[{ "node": "Reservation Storage Signature", "type": "main", "index": 0 }]] },
+    "Reservation Storage Signature": { "main": [[{ "node": "Save Reservation Through Storage", "type": "main", "index": 0 }]] },
+    "Save Reservation Through Storage": { "main": [[{ "node": "Load Updated Campaign Performance", "type": "main", "index": 0 }]] },
+    "Load Updated Campaign Performance": { "main": [[{ "node": "Calculate Progress Milestone", "type": "main", "index": 0 }]] },
+    "Calculate Progress Milestone": { "main": [[{ "node": "Update Campaign Metrics In Sheets", "type": "main", "index": 0 }]] },
+    "Update Campaign Metrics In Sheets": { "main": [[{ "node": "Prepare Reservation Audit", "type": "main", "index": 0 }]] },
+    "Prepare Reservation Audit": { "main": [[{ "node": "Reservation Audit Signature", "type": "main", "index": 0 }]] },
+    "Reservation Audit Signature": { "main": [[{ "node": "Create Reservation Audit Event", "type": "main", "index": 0 }]] },
+    "Create Reservation Audit Event": { "main": [[{ "node": "Progress Milestone Reached?", "type": "main", "index": 0 }]] },
+    "Progress Milestone Reached?": { "main": [[{ "node": "Send Linq Progress Update", "type": "main", "index": 0 }], [{ "node": "Prepare Reporting Trigger", "type": "main", "index": 0 }]] },
+    "Send Linq Progress Update": { "main": [[{ "node": "Prepare Reporting Trigger", "type": "main", "index": 0 }]] },
+    "Prepare Reporting Trigger": { "main": [[{ "node": "Reporting Trigger Signature", "type": "main", "index": 0 }]] },
+    "Reporting Trigger Signature": { "main": [[{ "node": "Trigger Campaign Reporting", "type": "main", "index": 0 }]] },
+    "Trigger Campaign Reporting": { "main": [[{ "node": "Return Reservation Result", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveDataErrorExecution": "none", "saveDataSuccessExecution": "none", "saveManualExecutions": false, "saveExecutionProgress": false },
+  "versionId": "15000000-0000-4000-8000-000000000999",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

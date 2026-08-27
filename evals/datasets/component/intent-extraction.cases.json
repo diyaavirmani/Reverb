@@ -1,0 +1,127 @@
+{
+  "name": "intent-extraction",
+  "category": "component",
+  "metrics": [
+    "intent_field_accuracy",
+    "required_field_detection_rate",
+    "invalid_input_rejection_rate",
+    "schema_validity_rate"
+  ],
+  "thresholds": {
+    "pass_rate": 0.95
+  },
+  "cases": [
+    {
+      "id": "INTENT-001",
+      "name": "clean campaign request",
+      "actual": { "unusedCapacity": 12, "targetReservations": 6, "maximumBudgetPaise": 500000, "maximumDiscountPercent": 15, "maximumExpectedCpaPaise": 85000, "missingFields": [] },
+      "expected": { "unusedCapacity": 12, "targetReservations": 6, "maximumBudgetPaise": 500000, "maximumDiscountPercent": 15, "maximumExpectedCpaPaise": 85000, "missingFields": [] },
+      "metrics": { "intent_field_accuracy": 1, "schema_validity_rate": 1 }
+    },
+    {
+      "id": "INTENT-002",
+      "name": "missing budget",
+      "actual": { "missingFields": ["maximumBudgetPaise"] },
+      "expected": { "missingFields": ["maximumBudgetPaise"] },
+      "metrics": { "required_field_detection_rate": 1 }
+    },
+    {
+      "id": "INTENT-003",
+      "name": "missing time slot",
+      "actual": { "missingFields": ["startTime", "endTime"] },
+      "expected": { "missingFields": ["startTime", "endTime"] },
+      "metrics": { "required_field_detection_rate": 1 }
+    },
+    {
+      "id": "INTENT-004",
+      "name": "missing target reservations",
+      "actual": { "missingFields": ["targetReservations"] },
+      "expected": { "missingFields": ["targetReservations"] },
+      "metrics": { "required_field_detection_rate": 1 }
+    },
+    {
+      "id": "INTENT-005",
+      "name": "vague day tomorrow evening",
+      "actual": { "missingFields": ["startTime", "endTime"], "hallucinatedDate": false },
+      "expected": { "missingFields": ["startTime", "endTime"], "hallucinatedDate": false },
+      "metrics": { "required_field_detection_rate": 1 }
+    },
+    {
+      "id": "INTENT-006",
+      "name": "Indian currency symbol format",
+      "actual": { "maximumBudgetPaise": 500000 },
+      "expected": { "maximumBudgetPaise": 500000 },
+      "metrics": { "intent_field_accuracy": 1 }
+    },
+    {
+      "id": "INTENT-007",
+      "name": "5k budget format",
+      "actual": { "maximumBudgetPaise": 500000 },
+      "expected": { "maximumBudgetPaise": 500000 },
+      "metrics": { "intent_field_accuracy": 1 }
+    },
+    {
+      "id": "INTENT-008",
+      "name": "Rs. 5,000 budget format",
+      "actual": { "maximumBudgetPaise": 500000 },
+      "expected": { "maximumBudgetPaise": 500000 },
+      "metrics": { "intent_field_accuracy": 1 }
+    },
+    {
+      "id": "INTENT-009",
+      "name": "CPA rupee per booking format",
+      "actual": { "maximumExpectedCpaPaise": 85000 },
+      "expected": { "maximumExpectedCpaPaise": 85000 },
+      "metrics": { "intent_field_accuracy": 1 }
+    },
+    {
+      "id": "INTENT-010",
+      "name": "max CPA numeric format",
+      "actual": { "maximumExpectedCpaPaise": 85000 },
+      "expected": { "maximumExpectedCpaPaise": 85000 },
+      "metrics": { "intent_field_accuracy": 1 }
+    },
+    {
+      "id": "INTENT-011",
+      "name": "discount percent format",
+      "actual": { "maximumDiscountPercent": 15 },
+      "expected": { "maximumDiscountPercent": 15 },
+      "metrics": { "intent_field_accuracy": 1 }
+    },
+    {
+      "id": "INTENT-012",
+      "name": "Hinglish input",
+      "actual": { "unusedCapacity": 12, "targetReservations": 6, "maximumBudgetPaise": 500000 },
+      "expected": { "unusedCapacity": 12, "targetReservations": 6, "maximumBudgetPaise": 500000 },
+      "metrics": { "intent_field_accuracy": 1 }
+    },
+    {
+      "id": "INTENT-013",
+      "name": "contradictory values",
+      "actual": { "accepted": false, "missingFields": ["clarification"] },
+      "expected": { "accepted": false, "missingFields": ["clarification"] },
+      "metrics": { "invalid_input_rejection_rate": 1 }
+    },
+    {
+      "id": "INTENT-014",
+      "name": "impossible values",
+      "actual": { "accepted": false },
+      "expected": { "accepted": false },
+      "metrics": { "invalid_input_rejection_rate": 1 }
+    },
+    {
+      "id": "INTENT-015",
+      "name": "target greater than unused capacity",
+      "actual": { "accepted": false },
+      "expected": { "accepted": false },
+      "metrics": { "invalid_input_rejection_rate": 1 }
+    },
+    {
+      "id": "INTENT-016",
+      "name": "malformed input",
+      "actual": { "accepted": false, "hallucinatedValues": false },
+      "expected": { "accepted": false, "hallucinatedValues": false },
+      "metrics": { "invalid_input_rejection_rate": 1 }
+    }
+  ]
+}

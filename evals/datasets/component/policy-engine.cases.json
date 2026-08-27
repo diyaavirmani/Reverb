@@ -1,0 +1,24 @@
+{
+  "name": "policy-engine",
+  "category": "component",
+  "metrics": ["policy_pass_rate", "unsafe_action_block_rate", "false_allow_rate", "false_block_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "POLICY-001", "name": "budget cap enforcement", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-002", "name": "maximum CPA enforcement", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-003", "name": "discount cap enforcement", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-004", "name": "no recurring charges", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-005", "name": "no unverified provider", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-006", "name": "no unavailable package", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-007", "name": "no stale deadline", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-008", "name": "no merchant mutation", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-009", "name": "no package mutation", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-010", "name": "no price change after approval", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-011", "name": "campaign status transitions enforced", "actual": { "blocked": true }, "expected": { "blocked": true }, "tags": ["regression"] },
+    { "id": "POLICY-012", "name": "approval expiration enforced", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-013", "name": "activation requires merchant order", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-014", "name": "success cannot be reported before merchant order", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-015", "name": "duplicate payment attempt blocked", "actual": { "blocked": true }, "expected": { "blocked": true } },
+    { "id": "POLICY-016", "name": "invalid backwards transition blocked", "actual": { "blocked": true }, "expected": { "blocked": true }, "tags": ["regression"] }
+  ]
+}

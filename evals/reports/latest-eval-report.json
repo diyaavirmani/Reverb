@@ -1,0 +1,232 @@
+{
+  "timestamp": "2026-08-27T15:11:14.933Z",
+  "mode": "fixture",
+  "datasetCounts": {
+    "application-fixture-lifecycle-happy-path": 5,
+    "application-fixture-lifecycle-guarded-failures": 4,
+    "application-fixture-lifecycle-adversarial": 2,
+    "application-fixture-lifecycle-regression": 2
+  },
+  "componentScores": {},
+  "workflowScores": {},
+  "applicationScores": {
+    "application-fixture-lifecycle-happy-path": 1,
+    "application-fixture-lifecycle-guarded-failures": 1,
+    "application-fixture-lifecycle-adversarial": 1,
+    "application-fixture-lifecycle-regression": 1
+  },
+  "safetyGuardrailResults": [],
+  "latencySummary": {
+    "totalMs": 1,
+    "averageCaseMs": 0
+  },
+  "failedCases": [],
+  "regressions": [],
+  "recommendedFixOrder": [],
+  "suites": [
+    {
+      "name": "application-fixture-lifecycle-happy-path",
+      "category": "application",
+      "status": "pass",
+      "metrics": {
+        "pass_rate": 1,
+        "case_count": 5,
+        "failed_case_count": 0
+      },
+      "cases": [
+        {
+          "id": "APP-LIFE-001",
+          "name": "successful campaign creation",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 1,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-LIFE-002",
+          "name": "correct provider selected",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-LIFE-005",
+          "name": "campaign approval succeeds with fixture transaction",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-LIFE-007",
+          "name": "reservation accepted",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-LIFE-010",
+          "name": "complete fixture E2E",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "application-fixture-lifecycle-guarded-failures",
+      "category": "application",
+      "status": "pass",
+      "metrics": {
+        "pass_rate": 1,
+        "case_count": 4,
+        "failed_case_count": 0
+      },
+      "cases": [
+        {
+          "id": "APP-LIFE-003",
+          "name": "invalid provider rejected",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-LIFE-004",
+          "name": "budget violation blocked",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-LIFE-006",
+          "name": "duplicate transaction blocked",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-LIFE-008",
+          "name": "over-capacity reservation blocked",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "application-fixture-lifecycle-adversarial",
+      "category": "application",
+      "status": "pass",
+      "metrics": {
+        "pass_rate": 1,
+        "case_count": 2,
+        "failed_case_count": 0
+      },
+      "cases": [
+        {
+          "id": "APP-ADV-001",
+          "name": "live provider keys are not required for fixture showcase",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-ADV-002",
+          "name": "demo transaction does not claim real money movement",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "application-fixture-lifecycle-regression",
+      "category": "application",
+      "status": "pass",
+      "metrics": {
+        "pass_rate": 1,
+        "case_count": 2,
+        "failed_case_count": 0
+      },
+      "cases": [
+        {
+          "id": "APP-LIFE-009",
+          "name": "performance metrics calculated",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "id": "APP-REG-001",
+          "name": "minimum deployment variables stay fixture-first",
+          "status": "pass",
+          "score": 1,
+          "summary": "All deterministic assertions passed.",
+          "failures": [],
+          "latencyMs": 0,
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    }
+  ]
+}

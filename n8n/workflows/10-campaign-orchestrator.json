@@ -1,0 +1,95 @@
+{
+  "name": "Reverb Fill - 10 Campaign Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reverb/campaign",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000001",
+      "name": "Receive Campaign Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-840, 0],
+      "webhookId": "10000000-0000-4000-8000-000000000501"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nreturn [{ json: { payload: { ...body, ownerMessage: body.ownerMessage ?? 'Fill Friday 7-9 PM with 12 unused seats, target 6 reservations, budget Rs 5,000, maximum discount 15%, and maximum CPA Rs 850.', spotId: body.spotId ?? $env.DEMO_SPOT_ID } } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000002",
+      "name": "Normalize Campaign Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-620, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.APP_URL || 'http://127.0.0.1:3000') + '/api/demo/campaign' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.payload }}",
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000003",
+      "name": "Call Campaign Stage API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json;\nif (!result || typeof result.campaignId !== 'string') {\n  return [{ json: { ok: false, workflow: 'campaign-orchestrator', status: 'failed', data: {}, errors: [{ code: result?.code ?? 'CAMPAIGN_STAGE_FAILED', message: result?.error ?? 'Campaign stage did not return a campaign result' }] } }];\n}\nreturn [{ json: { ok: true, workflow: 'campaign-orchestrator', status: 'completed', data: { campaignId: result.campaignId, status: result.status, selectedPackageId: result.selectedPackageId, eligibleOptionCount: result.eligibleOptionCount, rejectedOptionCount: result.rejectedOptionCount, qualityStatus: result.qualityStatus }, errors: [] } }];"
+      },
+      "id": "10000000-0000-4000-8000-000000000004",
+      "name": "Format Campaign Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.ok ? 200 : 400 }}"
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000005",
+      "name": "Respond Campaign Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [100, 0]
+    }
+  ],
+  "connections": {
+    "Receive Campaign Request": {
+      "main": [[{ "node": "Normalize Campaign Request", "type": "main", "index": 0 }]]
+    },
+    "Normalize Campaign Request": {
+      "main": [[{ "node": "Call Campaign Stage API", "type": "main", "index": 0 }]]
+    },
+    "Call Campaign Stage API": {
+      "main": [[{ "node": "Format Campaign Response", "type": "main", "index": 0 }]]
+    },
+    "Format Campaign Response": {
+      "main": [[{ "node": "Respond Campaign Result", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "versionId": "10000000-0000-4000-8000-000000000999",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

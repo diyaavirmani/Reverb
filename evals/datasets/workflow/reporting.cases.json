@@ -1,0 +1,26 @@
+{
+  "name": "reporting",
+  "category": "workflow",
+  "metrics": ["report_success_rate", "privacy_rate", "invalid_campaign_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    {
+      "id": "WF-REPORTING-001",
+      "name": "normal report",
+      "input": { "campaignId": "EVAL-CAMPAIGN-ACTIVE" },
+      "expected": { "ok": true, "workflow": "campaign-reporting" }
+    },
+    {
+      "id": "WF-REPORTING-002",
+      "name": "zero reservation report",
+      "input": { "campaignId": "EVAL-CAMPAIGN-ZERO-RESERVATIONS" },
+      "expected": { "ok": true, "confirmedReservationCount": 0 }
+    },
+    {
+      "id": "WF-REPORTING-003",
+      "name": "invalid campaign",
+      "input": { "campaignId": "" },
+      "expected": { "ok": false, "code": "CAMPAIGN_ID_REQUIRED" }
+    }
+  ]
+}

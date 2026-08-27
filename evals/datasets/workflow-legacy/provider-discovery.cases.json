@@ -1,0 +1,15 @@
+{
+  "name": "provider-discovery",
+  "category": "workflow",
+  "metrics": ["selection_rate", "rejection_reason_rate", "deterministic_finance_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-DISCOVERY-001", "name": "valid campaign selects Delhi Food Guide", "expected": { "selectedPackageId": "package_local_dining_boost" } },
+    { "id": "WF-DISCOVERY-002", "name": "unverified provider rejected", "expected": { "rejected": true } },
+    { "id": "WF-DISCOVERY-003", "name": "over-budget package rejected", "expected": { "rejected": true } },
+    { "id": "WF-DISCOVERY-004", "name": "high CPA package rejected", "expected": { "rejected": true } },
+    { "id": "WF-DISCOVERY-005", "name": "weak geography provider rejected", "expected": { "rejected": true } },
+    { "id": "WF-DISCOVERY-006", "name": "missing providers controlled error", "expected": { "controlledError": true } },
+    { "id": "WF-DISCOVERY-007", "name": "missing packages controlled error", "expected": { "controlledError": true } }
+  ]
+}

@@ -75,6 +75,25 @@ describe("runtime configuration", () => {
     });
   });
 
+  it("does not validate or require live integration values in fixture mode", () => {
+    const config = loadRuntimeConfig({
+      USE_FIXTURES: "true",
+      APP_URL: "local-app-url-placeholder",
+      OPENAI_API_KEY: "",
+      SENSO_API_BASE: "senso-url-placeholder",
+      LINQ_API_BASE: "linq-url-placeholder",
+      PRAVA_API_BASE: "prava-url-placeholder",
+      N8N_STORAGE_WEBHOOK_URL: "n8n-storage-placeholder"
+    });
+    const adapters = createIntegrationAdapters(config);
+
+    expect(config).toEqual({
+      useFixtures: true,
+      mode: "fixture"
+    });
+    expect(Object.values(adapters).every((adapter) => adapter.mode === "fixture")).toBe(true);
+  });
+
   it("loads complete live mode from the final variable contract", () => {
     const config = loadRuntimeConfig(completeLiveEnv);
     const adapters = createIntegrationAdapters(config);

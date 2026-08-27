@@ -15,7 +15,13 @@
         "tableau:build": "tsx scripts/build-tableau-dataset.ts",
         "demo:reset": "tsx scripts/reset-demo.ts",
         "demo:seed": "tsx scripts/seed-demo.ts",
-        "demo:verify": "tsx scripts/verify-demo-readiness.ts"
+        "demo:verify": "tsx scripts/verify-demo-readiness.ts",
+        "eval:component": "tsx evals/runners/run-component-evals.ts",
+        "eval:workflow": "tsx evals/runners/run-workflow-evals.ts",
+        "eval:application": "tsx evals/runners/run-application-evals.ts",
+        "eval:all": "tsx evals/runners/run-all-evals.ts",
+        "eval:report": "tsx evals/runners/run-all-evals.ts --report",
+        "guardrails:check": "tsx evals/runners/run-all-evals.ts --guardrails-only"
     },
     "dependencies": {
         "csv-parse": "^7.0.1",

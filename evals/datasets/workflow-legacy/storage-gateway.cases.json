@@ -1,0 +1,19 @@
+{
+  "name": "storage-gateway",
+  "category": "workflow",
+  "metrics": ["http_status_rate", "json_envelope_rate", "sheet_side_effect_rate"],
+  "thresholds": { "pass_rate": 1 },
+  "cases": [
+    { "id": "WF-STORAGE-001", "name": "list providers", "input": { "operation": "list_providers" }, "expected": { "httpStatus": 200, "minimumRows": 3, "ids": ["PROV-001", "PROV-002", "PROV-003"] } },
+    { "id": "WF-STORAGE-002", "name": "list packages", "input": { "operation": "list_packages" }, "expected": { "httpStatus": 200, "minimumRows": 3, "ids": ["PKG-001", "PKG-002", "PKG-003"] } },
+    { "id": "WF-STORAGE-003", "name": "append audit event", "input": { "operation": "append_audit_event", "record": { "event_id": "EVAL-AUDIT-STORAGE-001", "campaign_id": "EVAL-CAMPAIGN-STORAGE", "event_type": "EVAL_STORAGE_TEST", "description": "Eval storage gateway event", "metadata": { "source": "eval_harness" } } }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-004", "name": "create campaign", "input": { "operation": "create_campaign" }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-005", "name": "get campaign", "input": { "operation": "get_campaign" }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-006", "name": "update campaign", "input": { "operation": "update_campaign" }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-007", "name": "save and get campaign options", "input": { "operation": "save_campaign_options" }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-008", "name": "save campaign asset", "input": { "operation": "save_campaign_asset" }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-009", "name": "save transaction and merchant order", "input": { "operation": "save_transaction" }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-010", "name": "save reservation and list reservations", "input": { "operation": "save_reservation" }, "expected": { "httpStatus": 200 } },
+    { "id": "WF-STORAGE-011", "name": "invalid operation controlled error", "input": { "operation": "invalid_operation" }, "expected": { "controlledError": true } }
+  ]
+}
