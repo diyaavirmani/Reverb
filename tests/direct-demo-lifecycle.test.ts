@@ -140,4 +140,34 @@ describe("direct fixture demo lifecycle API", () => {
     },
     15000
   );
+
+  it(
+    "falls back to the local fixture spot when the configured demo spot id is not in JSON fixtures",
+    async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+        throw new Error("External fetch should not be called in fixture demo lifecycle.");
+      });
+      process.env = {
+        ...process.env,
+        DEMO_SPOT_ID: "SPOT-001"
+      };
+
+      const response = await POST(
+        new Request("http://localhost/api/demo/lifecycle", {
+          method: "POST",
+          body: JSON.stringify({})
+        })
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        mode: "fixture",
+        finalStatus: "ACTIVE",
+        selectedPackageId: "package_local_dining_boost"
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    },
+    15000
+  );
 });

@@ -49,6 +49,13 @@ const requiredEnvironmentVariables = [
 ] as const;
 
 const requiredWorkflows = [
+  "10-campaign-orchestrator.json",
+  "13-commerce.json",
+  "15-reservation-performance.json",
+  "16-campaign-reporting.json"
+] as const;
+
+const requiredLegacyWorkflows = [
   "01-check-processed-event.json",
   "02-create-audit-event.json",
   "03-conversation-state.json",
@@ -58,9 +65,7 @@ const requiredWorkflows = [
   "11-provider-discovery.json",
   "12-creative-quality.json",
   "13-prava-transaction.json",
-  "14-promotion-activation.json",
-  "15-reservation-performance.json",
-  "16-campaign-reporting.json"
+  "14-promotion-activation.json"
 ] as const;
 
 runNpm("validate:fixtures");
@@ -90,6 +95,11 @@ async function verifyEnvironmentDocumentation(): Promise<void> {
 async function verifyWorkflowsExist(): Promise<void> {
   await Promise.all(
     requiredWorkflows.map((fileName) => readFile(path.join("n8n", "workflows", fileName), "utf8"))
+  );
+  await Promise.all(
+    requiredLegacyWorkflows.map((fileName) =>
+      readFile(path.join("n8n", "workflows-legacy", fileName), "utf8")
+    )
   );
 }
 

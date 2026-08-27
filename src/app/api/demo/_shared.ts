@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { createIntegrationAdapters, loadRuntimeConfig, type IntegrationAdapters } from "../../../lib/adapters";
 import { CampaignService, CampaignServiceError } from "../../../lib/core/campaign-service";
-import { createStorageRepository } from "../../../lib/repositories";
+import { createStorageRepository, type StorageRepository } from "../../../lib/repositories";
 import { ReservationSubmissionSchema } from "../../../schemas";
 
 export const defaultCurrentTime = "2026-08-01T00:00:00.000Z";
@@ -150,10 +150,29 @@ export async function createDemoContext(input: DemoBaseInput = {}) {
   return {
     service: new CampaignService(repository, getDemoAdapters(adapterCacheKey, config), clock),
     repository,
-    spotId: input.spotId ?? process.env.DEMO_SPOT_ID ?? "spot_quiet_cup_cafe",
+    spotId: await resolveDemoSpotId(repository, input.spotId ?? process.env.DEMO_SPOT_ID),
     requestedByOwnerId: input.requestedByOwnerId ?? input.ownerId ?? "owner_diya_demo",
     ownerMessage: input.ownerMessage ?? defaultOwnerMessage
   };
+}
+
+async function resolveDemoSpotId(repository: StorageRepository, configuredSpotId?: string): Promise<string> {
+  if (configuredSpotId) {
+    const configuredSpot = await repository.getSpot(configuredSpotId);
+
+    if (configuredSpot !== null) {
+      return configuredSpot.id;
+    }
+  }
+
+  const fixtureSpots = await repository.listSpots();
+  const demoSpot = fixtureSpots.find((spot) => spot.id === "spot_quiet_cup_cafe") ?? fixtureSpots[0];
+
+  if (!demoSpot) {
+    throw new CampaignServiceError("SPOT_NOT_FOUND", "Spot was not found.", 404);
+  }
+
+  return demoSpot.id;
 }
 
 async function resolveFixtureDataDir(): Promise<string> {
