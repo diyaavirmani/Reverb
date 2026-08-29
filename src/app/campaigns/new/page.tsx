@@ -1,35 +1,25 @@
+import { SidebarLayout } from "../../../components/app-shell";
 import { CampaignForm } from "../../../components/campaign-form";
-import { Badge, Card, PageContainer } from "../../../components/ui";
+import { creative, demoCampaign } from "../../../components/demo-data";
+import { Icon } from "../../../components/icons";
 
 export default function CreateCampaignPage() {
+
   return (
-    <PageContainer>
-      <div className="section-header">
-        <div>
-          <Badge>Create Campaign</Badge>
-          <h1 style={{ marginTop: 14 }}>Create a fixture campaign</h1>
-          <p className="lead" style={{ marginTop: 18 }}>
-            Enter the quiet slot constraints. Reverb uses local fixture data to recommend a campaign
-            without requiring live provider keys.
-          </p>
-        </div>
-      </div>
-      <div className="dashboard-grid">
-        <CampaignForm />
-        <Card>
-          <div className="stack">
-            <p className="eyebrow">What happens next</p>
-            <h2>Find Best Campaign</h2>
-            <p className="muted">
-              The backend evaluates provider packages with deterministic checks for budget, discount,
-              merchant, deadline, price, CPA, and availability.
-            </p>
-            <p className="muted">
-              Fixture mode simulates the commerce path and labels the transaction as demo-only.
-            </p>
+    <SidebarLayout active="new">
+      <header className="create-header"><span className="breadcrumb">Campaigns / New Campaign</span><h1>Create Campaign</h1><p>Tell Reverb what capacity you need to recover and the constraints it must respect.</p></header>
+      <div className="create-layout">
+        <CampaignForm campaign={demoCampaign} initialCaption={creative.caption} />
+        <aside className="constraint-panel card">
+          <span className="constraint-icon"><Icon name="shield" /></span>
+          <h2>Guardrails stay in control</h2>
+          <p>Reverb evaluates every package before it can be recommended.</p>
+          <div className="constraint-list">
+            {["Budget limit enforced", "Maximum CPA protected", "Discount capped at 15%", "Verified providers only", "Owner approval required"].map((item) => <span key={item}><i><Icon name="check" /></i>{item}</span>)}
           </div>
-        </Card>
+          <div className="constraint-note"><Icon name="spark" /><span><strong>Deterministic fixture journey</strong><small>The complete lifecycle runs locally without external services.</small></span></div>
+        </aside>
       </div>
-    </PageContainer>
+    </SidebarLayout>
   );
 }

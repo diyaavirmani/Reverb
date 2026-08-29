@@ -86,25 +86,6 @@ export function MetricCard({
   );
 }
 
-export function TimelineStep({
-  index,
-  title,
-  detail
-}: {
-  index: number;
-  title: string;
-  detail?: string;
-}) {
-  return (
-    <div className="timeline-step">
-      <div className="timeline-dot">{index}</div>
-      <div>
-        <strong>{title}</strong>
-        {detail ? <p className="muted">{detail}</p> : null}
-      </div>
-    </div>
-  );
-}
 export function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const tone = normalized.includes("active") || normalized.includes("selected") || normalized.includes("verified")
