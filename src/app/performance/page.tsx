@@ -3,8 +3,10 @@ import { CampaignDateText } from "../../components/campaign-date-text";
 import { baseReservations, creative, demoCampaign } from "../../components/demo-data";
 import { ResultsExperience } from "../../components/demo-launcher";
 import { Icon } from "../../components/icons";
+import { requireReverbPermission } from "../../lib/auth/authorization";
 
-export default function PerformancePage() {
+export default async function PerformancePage() {
+  await requireReverbPermission("analytics:read");
 
   return (
     <SidebarLayout active="reservations">

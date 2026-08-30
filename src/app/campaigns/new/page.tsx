@@ -2,8 +2,10 @@ import { SidebarLayout } from "../../../components/app-shell";
 import { CampaignForm } from "../../../components/campaign-form";
 import { creative, demoCampaign } from "../../../components/demo-data";
 import { Icon } from "../../../components/icons";
+import { requireReverbPermission } from "../../../lib/auth/authorization";
 
-export default function CreateCampaignPage() {
+export default async function CreateCampaignPage() {
+  await requireReverbPermission("campaign:create");
 
   return (
     <SidebarLayout active="new">

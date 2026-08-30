@@ -4,8 +4,10 @@ import { creative, demoCampaign } from "../../components/demo-data";
 import { ApprovalExperience } from "../../components/demo-launcher";
 import { Icon } from "../../components/icons";
 import { Badge, WorkflowProgress } from "../../components/ui";
+import { requireReverbPermission } from "../../lib/auth/authorization";
 
-export default function ApprovalPage() {
+export default async function ApprovalPage() {
+  await requireReverbPermission("campaign:approve");
 
   return (
     <div className="top-nav-page approval-page-shell">

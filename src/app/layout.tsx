@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -5,7 +6,7 @@ import { AppShell } from "../components/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Reverb Fill",
+  title: "Reverb",
   description: "Fill quiet slots at local spots with fixture-first campaign commerce."
 };
 
@@ -17,7 +18,15 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
+        <ClerkProvider
+          afterSignOutUrl="/"
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/dashboard"
+        >
+          <AppShell>{children}</AppShell>
+        </ClerkProvider>
       </body>
     </html>
   );

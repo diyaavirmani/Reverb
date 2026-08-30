@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { AuthenticatedAccount } from "./authenticated-account";
+
 import { Icon, type IconName } from "./icons";
 
 export type SidebarSection =
@@ -78,13 +80,7 @@ export function ApplicationHeader({ current }: { current?: string }) {
           </Link>
         ))}
       </nav>
-      <div className="account-menu" aria-label="Current venue">
-        <span className="account-avatar">IM</span>
-        <span>
-          <strong>Isha Malhotra</strong>
-          <small>{"Café Aura"}</small>
-        </span>
-      </div>
+      <AuthenticatedAccount placement="header" venue={"Caf\u00e9 Aura"} />
     </header>
   );
 }
@@ -104,14 +100,7 @@ export function AppSidebar({ active }: { active: SidebarSection }) {
           <SidebarLink {...item} active={active === item.id} key={item.id} />
         ))}
       </nav>
-      <div className="sidebar-venue">
-        <span className="venue-avatar">CA</span>
-        <span>
-          <strong>{"Café Aura"}</strong>
-          <small>Owner</small>
-        </span>
-        <span className="venue-chevron">&#8964;</span>
-      </div>
+      <AuthenticatedAccount placement="sidebar" venue={"Caf\u00e9 Aura"} />
     </aside>
   );
 }

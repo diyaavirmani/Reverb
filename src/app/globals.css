@@ -159,6 +159,17 @@ svg { display: block; width: 18px; height: 18px; flex: 0 0 auto; }
 .marketing-footer > div { display: flex; align-items: center; gap: 18px; }
 
 
+/* Authentication */
+.auth-page { min-height: 100vh; padding: 48px 24px; display: grid; place-items: center; background: #f8faff; }
+.auth-layout { width: min(100%, 430px); display: grid; justify-items: center; gap: 24px; }
+.auth-layout > header { max-width: 380px; text-align: center; }
+.auth-layout > header h1 { color: var(--text); font-size: 28px; line-height: 1.2; font-weight: 760; letter-spacing: 0; }
+.auth-layout > header p { margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.auth-provider-panel { width: 100%; display: grid; justify-items: center; }
+.auth-provider-panel .cl-rootBox { width: 100%; }
+.auth-provider-panel .cl-cardBox { width: 100%; box-shadow: var(--shadow); }
+.account-menu > span, .sidebar-account > span { min-width: 0; }
+.account-menu strong { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Shared application shell */
 .app-layout { min-height: 100vh; display: grid; grid-template-columns: 224px minmax(0, 1fr); background: #fafbfe; }
 .app-sidebar { height: 100vh; position: sticky; top: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: #fff; z-index: 20; }
@@ -169,12 +180,12 @@ svg { display: block; width: 18px; height: 18px; flex: 0 0 auto; }
 .sidebar-link:hover { color: var(--primary); background: #f8faff; }
 .sidebar-link.active { color: var(--primary); background: var(--primary-soft); font-weight: 700; }
 .sidebar-section-label { margin: 19px 12px 7px; color: var(--muted-light); font-size: 9px; font-weight: 750; text-transform: uppercase; }
-.sidebar-venue { margin-top: auto; min-height: 74px; padding: 15px 17px; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; border-top: 1px solid var(--border); }
+.sidebar-account { margin-top: auto; min-height: 74px; padding: 15px 17px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 10px; border-top: 1px solid var(--border); }
 .venue-avatar, .account-avatar { display: grid; place-items: center; border-radius: 6px; color: #fff; background: var(--primary); font-size: 10px; font-weight: 800; }
 .venue-avatar { width: 34px; height: 34px; }
-.sidebar-venue strong, .sidebar-venue small { display: block; }
-.sidebar-venue strong { font-size: 10px; }
-.sidebar-venue small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.sidebar-account strong, .sidebar-account small { display: block; }
+.sidebar-account strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-account small { margin-top: 3px; color: var(--muted); font-size: 8px; }
 .venue-chevron { color: var(--muted); }
 .app-main { min-width: 0; padding: 27px 34px 34px; }
 .page-heading h1, .dashboard-header h1, .discovery-header h1, .create-header h1, .creative-heading h1, .approval-heading h1, .results-header h1 { color: var(--text); font-size: 26px; line-height: 1.2; font-weight: 760; letter-spacing: 0; }
@@ -549,11 +560,13 @@ svg { display: block; width: 18px; height: 18px; flex: 0 0 auto; }
   .landing-workflow { grid-template-columns: repeat(4, 1fr); row-gap: 28px; }
   .landing-workflow li::after { display: none; }
   .app-layout { display: block; }
-  .app-sidebar { height: auto; position: sticky; top: 0; display: grid; grid-template-columns: auto 1fr; border-right: 0; border-bottom: 1px solid var(--border); }
+  .app-sidebar { height: auto; position: sticky; top: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; border-right: 0; border-bottom: 1px solid var(--border); }
   .sidebar-brand { height: 58px; padding: 0 16px; border-bottom: 0; }
   .sidebar-nav { padding: 9px 12px; display: flex; align-items: center; gap: 3px; overflow-x: auto; }
   .sidebar-link { min-width: max-content; min-height: 36px; padding: 0 10px; }
-  .sidebar-section-label, .sidebar-venue { display: none; }
+  .sidebar-section-label { display: none; }
+  .sidebar-account { min-height: 58px; margin-top: 0; padding: 0 14px; display: grid; grid-template-columns: 32px; border-top: 0; }
+  .sidebar-account > span { display: none; }
   .app-main { padding: 24px 18px 30px; }
   .campaign-summary-card { grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .summary-venue { grid-column: 1 / -1; }

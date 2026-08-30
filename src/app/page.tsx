@@ -1,3 +1,5 @@
+import { Show } from "@clerk/nextjs";
+
 import { MarketingFooter, MarketingHeader } from "../components/app-shell";
 import {
   benefitItems,
@@ -22,7 +24,12 @@ export default function Home() {
             <h1>Fill quiet slots.<br />Recover <span>real revenue.</span></h1>
             <p>An AI agent that finds empty capacity, launches promotions, and turns it into measurable revenue.</p>
             <div className="hero-actions">
-              <ButtonLink href="/campaigns/new">Get Started <Icon name="arrow" /></ButtonLink>
+              <Show when="signed-out">
+                <ButtonLink href="/sign-in?redirect_url=%2Fdashboard">Get Started <Icon name="arrow" /></ButtonLink>
+              </Show>
+              <Show when="signed-in">
+                <ButtonLink href="/dashboard">Get Started <Icon name="arrow" /></ButtonLink>
+              </Show>
             </div>
           </div>
           <div className="hero-product-preview">
