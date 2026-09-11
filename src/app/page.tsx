@@ -1,4 +1,4 @@
-import { Show } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 import { MarketingFooter, MarketingHeader } from "../components/app-shell";
 import {
@@ -14,7 +14,9 @@ import {
 import { Icon } from "../components/icons";
 import { Badge, ButtonLink } from "../components/ui";
 
-export default function Home() {
+export default async function Home() {
+  const { userId } = await auth();
+
   return (
     <div className="marketing-page">
       <MarketingHeader />
@@ -24,12 +26,11 @@ export default function Home() {
             <h1>Fill quiet slots.<br />Recover <span>real revenue.</span></h1>
             <p>An AI agent that finds empty capacity, launches promotions, and turns it into measurable revenue.</p>
             <div className="hero-actions">
-              <Show when="signed-out">
-                <ButtonLink href="/sign-in?redirect_url=%2Fdashboard">Get Started <Icon name="arrow" /></ButtonLink>
-              </Show>
-              <Show when="signed-in">
-                <ButtonLink href="/dashboard">Get Started <Icon name="arrow" /></ButtonLink>
-              </Show>
+              {!userId ? (
+                <ButtonLink href="/sign-in?redirect_url=%2Fapp-entry">Get Started <Icon name="arrow" /></ButtonLink>
+              ) : (
+                <ButtonLink href="/app-entry">Get Started <Icon name="arrow" /></ButtonLink>
+              )}
             </div>
           </div>
           <div className="hero-product-preview">

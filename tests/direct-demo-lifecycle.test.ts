@@ -76,6 +76,20 @@ describe("direct fixture demo lifecycle API", () => {
       expect(body.merchantOrderId).toEqual(expect.any(String));
       expect(body.reservationId).toEqual(expect.any(String));
       expect(body.auditEventCount).toBeGreaterThanOrEqual(12);
+      expect(body.runId).toMatch(/^run_campaign_/);
+      expect(body.executionTrace).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step: "provider_discovery", status: "complete" }),
+        expect.objectContaining({ step: "provider_scoring", status: "complete" }),
+        expect.objectContaining({ step: "owner_approval", status: "complete" }),
+        expect.objectContaining({ step: "campaign_activation", status: "complete" }),
+        expect.objectContaining({ step: "performance", status: "complete" })
+      ]));
+      expect(body.policyChecks).toEqual(expect.arrayContaining([
+        expect.objectContaining({ key: "budget", status: "PASS" }),
+        expect.objectContaining({ key: "cpa", status: "PASS" }),
+        expect.objectContaining({ key: "provider", status: "PASS" })
+      ]));
+      expect(JSON.stringify(body.executionTrace)).not.toMatch(/api.?key|secret|token/i);
 
       const storedOrders = MerchantOrderSchema.array().parse(
         JSON.parse(await readFile(join(dataDirectory, "merchant-orders.json"), "utf8"))
@@ -96,6 +110,32 @@ describe("direct fixture demo lifecycle API", () => {
       expect(storedReservations).toHaveLength(1);
       expect(storedAuditEvents.length).toBeGreaterThanOrEqual(12);
       expect(storedJson).not.toMatch(/fixture_ephemeral_|paymentAuthorisationReference|card|cvv|token/i);
+    },
+    15000
+  );
+
+  it(
+    "stops at owner approval when the frontend requests a prepared lifecycle",
+    async () => {
+      const response = await POST(
+        new Request("http://localhost/api/demo/lifecycle", {
+          method: "POST",
+          body: JSON.stringify({ prepareOnly: true })
+        })
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        finalStatus: "AWAITING_OWNER_APPROVAL",
+        ownerApprovalStatus: "PENDING",
+        transactionStatus: "NOT_STARTED",
+        activationStatus: "NOT_STARTED",
+        reservationId: null
+      });
+      expect(body.executionTrace).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step: "owner_approval", status: "waiting" })
+      ]));
     },
     15000
   );

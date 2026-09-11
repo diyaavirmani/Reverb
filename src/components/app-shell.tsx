@@ -69,7 +69,7 @@ export function MarketingHeader() {
   );
 }
 
-export function ApplicationHeader({ current }: { current?: string }) {
+export function ApplicationHeader({ current, venue = "Venue setup pending" }: { current?: string; venue?: string }) {
   return (
     <header className="application-header">
       <Brand />
@@ -80,12 +80,12 @@ export function ApplicationHeader({ current }: { current?: string }) {
           </Link>
         ))}
       </nav>
-      <AuthenticatedAccount placement="header" venue={"Caf\u00e9 Aura"} />
+      <AuthenticatedAccount placement="header" venue={venue} />
     </header>
   );
 }
 
-export function AppSidebar({ active }: { active: SidebarSection }) {
+export function AppSidebar({ active, venue = "Venue setup pending" }: { active: SidebarSection; venue?: string }) {
   return (
     <aside className="app-sidebar">
       <div className="sidebar-brand">
@@ -100,15 +100,15 @@ export function AppSidebar({ active }: { active: SidebarSection }) {
           <SidebarLink {...item} active={active === item.id} key={item.id} />
         ))}
       </nav>
-      <AuthenticatedAccount placement="sidebar" venue={"Caf\u00e9 Aura"} />
+      <AuthenticatedAccount placement="sidebar" venue={venue} />
     </aside>
   );
 }
 
-export function SidebarLayout({ active, children }: { active: SidebarSection; children: ReactNode }) {
+export function SidebarLayout({ active, children, venue }: { active: SidebarSection; children: ReactNode; venue?: string }) {
   return (
     <div className="app-layout">
-      <AppSidebar active={active} />
+      <AppSidebar active={active} venue={venue} />
       <main className="app-main">{children}</main>
     </div>
   );

@@ -64,7 +64,8 @@ export const demoReportRequestSchema = z
   .strict();
 
 export const demoLifecycleRequestSchema = demoBaseRequestSchema.extend({
-  reservation: ReservationSubmissionSchema.omit({ campaignId: true }).partial().optional()
+  reservation: ReservationSubmissionSchema.omit({ campaignId: true }).partial().optional(),
+  prepareOnly: z.boolean().optional().default(false)
 });
 
 type DemoBaseInput = z.infer<typeof demoBaseRequestSchema>;
@@ -229,7 +230,9 @@ async function prepareCampaign(context: DemoContext) {
       totalCostPaise: option.totalCostPaise,
       expectedReservations: option.expectedReservations,
       expectedCpaPaise: option.expectedCpaPaise,
+      discountBps: option.discountBps,
       eligible: option.passesDeterministicChecks,
+      deterministicChecks: option.deterministicChecks,
       rejectionReasons: option.rejectionReasons
     })),
     qualityStatus: quality.review.status,
@@ -315,38 +318,131 @@ export async function runReportStage(input: z.infer<typeof demoReportRequestSche
 
 export async function runFullLifecycle(input: z.infer<typeof demoLifecycleRequestSchema>) {
   const context = await createDemoContext(input);
-  const campaignStage = await prepareCampaign(context);
-  const approval = await context.service.recordOwnerApproval({
-    campaignId: campaignStage.campaignId,
-    ownerId: context.requestedByOwnerId,
-    approved: true
+  const trace: LifecycleTraceEvent[] = [];
+  const campaign = await traced(trace, "campaign_request", "Campaign request created", {
+    inputSummary: context.ownerMessage,
+    run: () => context.service.createCampaignFromIntent({
+      spotId: context.spotId,
+      requestedByOwnerId: context.requestedByOwnerId,
+      ownerMessage: context.ownerMessage
+    }),
+    outputSummary: (result) => `${result.unusedCapacity} unused seats; target ${result.targetReservations} reservations.`
   });
-  const paymentSession = await context.service.createPaymentSession({ campaignId: campaignStage.campaignId });
+  const discovery = await traced(trace, "provider_discovery", "Provider packages discovered", {
+    inputSummary: `Campaign ${campaign.id}`,
+    run: () => context.service.discoverOptions(campaign.id),
+    outputSummary: (result) => `${result.options.length} provider packages evaluated.`
+  });
+  const selection = await traced(trace, "provider_scoring", "Valid provider package selected", {
+    inputSummary: `${discovery.options.length} evaluated options`,
+    run: () => context.service.selectOption(campaign.id),
+    outputSummary: (result) => result.selectedOption
+      ? `${result.selectedOption.packageId} selected with score ${result.selectedOption.score}.`
+      : "No package passed policy."
+  });
+  const creative = await traced(trace, "creative_preparation", "Campaign creative prepared", {
+    inputSummary: `Selected package ${selection.selectedOption?.packageId ?? "none"}`,
+    run: () => context.service.generateCreative(campaign.id),
+    outputSummary: (result) => `${result.assets.length} approval-gated creative assets prepared.`
+  });
+  const quality = await traced(trace, "constraint_evaluation", "Creative and policy checks evaluated", {
+    inputSummary: `${creative.assets.length} creative assets`,
+    run: () => context.service.runQualityChecks(campaign.id),
+    outputSummary: (result) => `Quality status ${result.review.status}; ${result.deterministicIssues.length} deterministic issues.`
+  });
+  const preparedSummary = await context.service.getCampaignSummary(campaign.id);
+  const campaignStage = buildCampaignStage(discovery.options, selection.selectedOption, quality.review.status, creative.assets.map((asset) => asset.id), campaign.id, preparedSummary.campaign.status);
+  const policyChecks = buildPolicyChecks(preparedSummary, campaignStage.options);
+
+  if (input.prepareOnly) {
+    const waitingAt = new Date().toISOString();
+    trace.push({
+      id: `${campaign.id}_owner_approval`,
+      step: "owner_approval",
+      status: "waiting",
+      startedAt: waitingAt,
+      endedAt: null,
+      durationMs: null,
+      summary: "Waiting for the owner to approve campaign spend.",
+      inputSummary: "Human approval required",
+      outputSummary: null
+    });
+    const auditEvents = await context.repository.listAuditEvents();
+    return {
+      mode: "fixture",
+      runId: `run_${campaign.id}`,
+      campaignId: campaign.id,
+      finalStatus: preparedSummary.campaign.status,
+      selectedOptionId: campaignStage.selectedOptionId,
+      selectedPackageId: campaignStage.selectedPackageId,
+      eligibleOptionCount: campaignStage.eligibleOptionCount,
+      rejectedOptionCount: campaignStage.rejectedOptionCount,
+      options: campaignStage.options,
+      qualityStatus: campaignStage.qualityStatus,
+      ownerApprovalStatus: "PENDING",
+      paymentSessionStatus: "NOT_STARTED",
+      transactionStatus: "NOT_STARTED",
+      merchantOrderId: null,
+      activationStatus: "NOT_STARTED",
+      publicActivationUrl: null,
+      reservationId: null,
+      isDemoBooking: true,
+      performance: preparedSummary.performance,
+      auditEventCount: auditEvents.length,
+      executionTrace: trace,
+      policyChecks
+    };
+  }
+
+  const approval = await traced(trace, "owner_approval", "Owner approved the campaign", {
+    inputSummary: "Explicit owner approval: true",
+    run: () => context.service.recordOwnerApproval({ campaignId: campaign.id, ownerId: context.requestedByOwnerId, approved: true }),
+    outputSummary: (result) => `Approval status ${result.approval.status}.`
+  });
+  const paymentSession = await traced(trace, "demo_transaction", "Controlled demo transaction created", {
+    inputSummary: `Approved campaign ${campaign.id}`,
+    run: () => context.service.createPaymentSession({ campaignId: campaign.id }),
+    outputSummary: (result) => `Fixture transaction status ${result.transaction.status}.`
+  });
   const checkout = await context.service.completeMerchantCheckout({
-    campaignId: campaignStage.campaignId,
+    campaignId: campaign.id,
     sessionId: "fixture_prava_authorized"
   });
-  const activation = await context.service.activatePromotion(campaignStage.campaignId);
-  const reservation = await context.service.recordReservation({
-    campaignId: campaignStage.campaignId,
-    customerName: input.reservation?.customerName ?? "Demo Guest",
-    customerContact: input.reservation?.customerContact ?? "demo@example.test",
-    partySize: input.reservation?.partySize ?? 2,
-    reservationTime: input.reservation?.reservationTime ?? "2026-08-07T14:00:00.000Z",
-    trackingCode: input.reservation?.trackingCode ?? `demo_tracking_${campaignStage.campaignId}`,
-    isDemoBooking: input.reservation?.isDemoBooking ?? true
+  const activation = await traced(trace, "campaign_activation", "Campaign activated", {
+    inputSummary: `Merchant order ${checkout.order.id}`,
+    run: () => context.service.activatePromotion(campaign.id),
+    outputSummary: (result) => `Campaign status ${result.campaign.status}.`
   });
-  const summary = await context.service.getCampaignSummary(campaignStage.campaignId);
+  const reservation = await traced(trace, "reservation", "Demo reservation received", {
+    inputSummary: `${input.reservation?.partySize ?? 2} guests`,
+    run: () => context.service.recordReservation({
+      campaignId: campaign.id,
+      customerName: input.reservation?.customerName ?? "Demo Guest",
+      customerContact: input.reservation?.customerContact ?? "demo@example.test",
+      partySize: input.reservation?.partySize ?? 2,
+      reservationTime: input.reservation?.reservationTime ?? "2026-08-07T14:00:00.000Z",
+      trackingCode: input.reservation?.trackingCode ?? `demo_tracking_${campaign.id}`,
+      isDemoBooking: input.reservation?.isDemoBooking ?? true
+    }),
+    outputSummary: (result) => `Reservation ${result.reservation.id} recorded.`
+  });
+  const summary = await traced(trace, "performance", "Campaign performance recalculated", {
+    inputSummary: `Campaign ${campaign.id}`,
+    run: () => context.service.getCampaignSummary(campaign.id),
+    outputSummary: (result) => `${result.performance.confirmedReservationCount} confirmed reservations.`
+  });
   const auditEvents = await context.repository.listAuditEvents();
 
   return {
     mode: "fixture",
-    campaignId: campaignStage.campaignId,
+    runId: `run_${campaign.id}`,
+    campaignId: campaign.id,
     finalStatus: summary.campaign.status,
     selectedOptionId: campaignStage.selectedOptionId,
     selectedPackageId: campaignStage.selectedPackageId,
     eligibleOptionCount: campaignStage.eligibleOptionCount,
     rejectedOptionCount: campaignStage.rejectedOptionCount,
+    options: campaignStage.options,
     qualityStatus: campaignStage.qualityStatus,
     ownerApprovalStatus: approval.approval.status,
     paymentSessionStatus: paymentSession.transaction.status,
@@ -357,6 +453,111 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
     reservationId: reservation.reservation.id,
     isDemoBooking: reservation.reservation.isTest,
     performance: summary.performance,
-    auditEventCount: auditEvents.length
+    auditEventCount: auditEvents.length,
+    executionTrace: trace,
+    policyChecks: buildPolicyChecks(summary, campaignStage.options)
   };
+}
+
+type LifecycleOption = ReturnType<typeof buildCampaignStage>["options"][number];
+type LifecycleTraceEvent = {
+  id: string;
+  step: string;
+  status: "complete" | "waiting" | "failed";
+  startedAt: string;
+  endedAt: string | null;
+  durationMs: number | null;
+  summary: string;
+  inputSummary: string;
+  outputSummary: string | null;
+};
+
+async function traced<T>(
+  trace: LifecycleTraceEvent[],
+  step: string,
+  summary: string,
+  operation: { inputSummary: string; run: () => Promise<T>; outputSummary: (result: T) => string }
+): Promise<T> {
+  const startedAt = new Date();
+  const started = performance.now();
+  try {
+    const result = await operation.run();
+    const endedAt = new Date();
+    trace.push({
+      id: `${step}_${trace.length + 1}`,
+      step,
+      status: "complete",
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+      durationMs: Math.max(0, Math.round((performance.now() - started) * 100) / 100),
+      summary,
+      inputSummary: operation.inputSummary,
+      outputSummary: operation.outputSummary(result)
+    });
+    return result;
+  } catch (error) {
+    const endedAt = new Date();
+    trace.push({
+      id: `${step}_${trace.length + 1}`,
+      step,
+      status: "failed",
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+      durationMs: Math.max(0, Math.round((performance.now() - started) * 100) / 100),
+      summary: error instanceof Error ? error.message : "Lifecycle step failed.",
+      inputSummary: operation.inputSummary,
+      outputSummary: null
+    });
+    throw error;
+  }
+}
+
+function buildCampaignStage(
+  options: Awaited<ReturnType<CampaignService["discoverOptions"]>>["options"],
+  selectedOption: Awaited<ReturnType<CampaignService["selectOption"]>>["selectedOption"],
+  qualityStatus: string,
+  assetIds: string[],
+  campaignId: string,
+  status: string
+) {
+  const mappedOptions = options.map((option) => ({
+    id: option.id,
+    packageId: option.packageId,
+    score: option.score,
+    totalCostPaise: option.totalCostPaise,
+    expectedReservations: option.expectedReservations,
+    expectedCpaPaise: option.expectedCpaPaise,
+    discountBps: option.discountBps,
+    eligible: option.passesDeterministicChecks,
+    deterministicChecks: option.deterministicChecks,
+    rejectionReasons: option.rejectionReasons
+  }));
+  return {
+    mode: "fixture",
+    campaignId,
+    status,
+    selectedOptionId: selectedOption?.id ?? null,
+    selectedPackageId: selectedOption?.packageId ?? null,
+    eligibleOptionCount: options.filter((option) => option.passesDeterministicChecks).length,
+    rejectedOptionCount: options.filter((option) => !option.passesDeterministicChecks).length,
+    options: mappedOptions,
+    qualityStatus,
+    assetIds
+  };
+}
+
+function buildPolicyChecks(
+  summary: Awaited<ReturnType<CampaignService["getCampaignSummary"]>>,
+  options: LifecycleOption[]
+) {
+  const selected = options.find((option) => option.id === summary.selectedOption?.id) ?? null;
+  if (!selected) return [];
+  return [
+    { key: "budget", label: "Budget", status: selected.deterministicChecks.budget ? "PASS" : "FAIL", detail: `${selected.totalCostPaise} paise <= ${summary.campaign.maxBudgetPaise} paise` },
+    { key: "cpa", label: "CPA", status: selected.deterministicChecks.cpa ? "PASS" : "FAIL", detail: `${selected.expectedCpaPaise} paise <= ${summary.campaign.maxExpectedCpaPaise} paise` },
+    { key: "discount", label: "Discount", status: selected.deterministicChecks.discount ? "PASS" : "FAIL", detail: `${selected.discountBps / 100}% <= ${summary.campaign.maxDiscountBps / 100}%` },
+    { key: "provider", label: "Provider verification", status: selected.eligible ? "PASS" : "FAIL", detail: selected.eligible ? "Selected package passed provider evidence policy." : "Provider evidence policy failed." },
+    { key: "capacity", label: "Capacity", status: summary.performance.remainingCapacity >= 0 ? "PASS" : "FAIL", detail: `${summary.performance.remainingCapacity} seats remain available.` },
+    { key: "approval", label: "Owner approval", status: summary.ownerApproval?.status === "APPROVED" ? "PASS" : "WAITING", detail: summary.ownerApproval?.status === "APPROVED" ? "Explicit owner approval recorded." : "Campaign cannot launch without owner approval." }
+  ];
 }

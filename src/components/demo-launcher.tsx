@@ -36,6 +36,7 @@ export function ApprovalExperience({
   const [activeCampaign, setActiveCampaign] = useState(campaign);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedAmount = snapshot?.lifecycle.options?.find((option) => option.id === snapshot.lifecycle.selectedOptionId)?.totalCostPaise ?? activeCampaign.selectedSpendPaise;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -53,8 +54,7 @@ export function ApprovalExperience({
     setError(null);
 
     try {
-      let lifecycle = snapshot?.lifecycle ?? null;
-      if (!isCompletedLifecycle(lifecycle)) lifecycle = await requestLifecycle(activeCampaign);
+      const lifecycle = await requestLifecycle(activeCampaign);
 
       const next: DemoSnapshot = {
         version: 1,
@@ -82,9 +82,9 @@ export function ApprovalExperience({
         <h2>Campaign Active</h2>
         <p>The fixture transaction completed and the campaign is ready to report measured results.</p>
         <dl className="success-summary">
-          <div><dt>Provider</dt><dd>Delhi Food Guide</dd></div>
+          <div><dt>Provider</dt><dd>Selected verified provider</dd></div>
           <div><dt>Package</dt><dd>Friday Story Placement</dd></div>
-          <div><dt>Amount</dt><dd>₹3,000</dd></div>
+          <div><dt>Amount</dt><dd>{formatMoney(selectedAmount)}</dd></div>
         </dl>
         <ButtonLink href="/performance" className="button-full">View Results <Icon name="arrow" /></ButtonLink>
       </div>
@@ -97,7 +97,7 @@ export function ApprovalExperience({
       <dl className="approval-transaction">
         <div><dt>Provider</dt><dd>Delhi Food Guide</dd></div>
         <div><dt>Package</dt><dd>Friday Story Placement</dd></div>
-        <div><dt>Amount</dt><dd>₹3,000</dd></div>
+        <div><dt>Amount</dt><dd>{formatMoney(selectedAmount)}</dd></div>
       </dl>
       <div className="approval-checks">
         {["Owner approval required", "Provider verified", "Budget compliant", "CPA compliant", "Package locked", "Amount locked", "No recurring charge"].map((check) => (
@@ -105,7 +105,7 @@ export function ApprovalExperience({
         ))}
       </div>
       <ActionButton className="button-full" onClick={approve} disabled={!hydrated || loading}>
-        <Icon name="approval" /> {loading ? "Approving campaign…" : hydrated ? "Approve ₹3,000 & Launch" : "Restoring campaign…"}
+        <Icon name="approval" /> {loading ? "Approving campaign…" : hydrated ? `Approve ${formatMoney(selectedAmount)} & Launch` : "Restoring campaign…"}
       </ActionButton>
       <p className="demo-disclaimer">Demo transaction — no real payment will be processed.</p>
       {error ? <p className="form-message form-error" role="alert">{error}</p> : null}
@@ -146,7 +146,7 @@ export function ResultsExperience({
     try {
       const lifecycle = await requestLifecycle(activeCampaign, `demo_ui_${Date.now()}`);
       const nextReservation: AddedDemoReservation = {
-        id: lifecycle.reservationId.slice(-4).toUpperCase(),
+        id: (lifecycle.reservationId ?? `reservation_${Date.now()}`).slice(-4).toUpperCase(),
         time: addedReservations.length % 2 === 0 ? "8:45 PM" : "8:55 PM",
         partySize: 2,
         revenuePaise: 215000
@@ -156,7 +156,7 @@ export function ResultsExperience({
       const next: DemoSnapshot = {
         version: 1,
         campaign: current?.campaign ?? campaignDraft(activeCampaign),
-        lifecycle: current?.lifecycle ?? lifecycle,
+        lifecycle,
         stage: "results",
         creativeCaption: current?.creativeCaption || initialCaption,
         approved: true,

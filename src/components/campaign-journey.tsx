@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AppSidebar, ApplicationHeader } from "./app-shell";
-import { applyDemoCampaignDraft, type DemoCampaign, type DemoProvider } from "./demo-data";
-import { loadDemoCampaignDraft, loadDemoSnapshot, updateDemoSnapshot } from "./demo-state";
+import { AgentActivity } from "./agent-activity";
+import { applyDemoCampaignDraft, applyDemoLifecycle, type DemoCampaign, type DemoProvider } from "./demo-data";
+import { loadDemoCampaignDraft, loadDemoSnapshot, updateDemoSnapshot, type DemoLifecycleState } from "./demo-state";
 import { Icon } from "./icons";
 import { ActionButton, Badge, InfoPanel, StatusBadge, SummaryStat, WorkflowProgress } from "./ui";
 
@@ -20,11 +21,13 @@ type CreativeData = {
 export function CampaignJourney({
   campaign,
   providers,
-  creative
+  creative,
+  venue
 }: {
   campaign: DemoCampaign;
   providers: DemoProvider[];
   creative: CreativeData;
+  venue?: string;
 }) {
   const [stage, setStage] = useState<"discovery" | "creative">("discovery");
   const [activeCampaign, setActiveCampaign] = useState(campaign);
@@ -32,12 +35,14 @@ export function CampaignJourney({
   const [caption, setCaption] = useState(creative.caption);
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [lifecycle, setLifecycle] = useState<DemoLifecycleState | null>(null);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const stored = loadDemoSnapshot();
       const storedCampaign = loadDemoCampaignDraft();
-      if (storedCampaign) setActiveCampaign(applyDemoCampaignDraft(campaign, storedCampaign));
+      if (storedCampaign) setActiveCampaign(applyDemoLifecycle(applyDemoCampaignDraft(campaign, storedCampaign), stored?.lifecycle ?? null));
+      setLifecycle(stored?.lifecycle ?? null);
       if (stored?.creativeCaption) setCaption(stored.creativeCaption);
       if (new URLSearchParams(window.location.search).get("step") === "creative") setStage("creative");
     }, 0);
@@ -113,7 +118,7 @@ export function CampaignJourney({
                   <div className="quality-row" key={check}><span><i><Icon name="check" /></i>{check}</span><Badge tone="success">Passed</Badge></div>
                 ))}
               </div>
-              <div className="creative-provider-note"><Icon name="approval" /> This creative is tailored for <strong>Delhi Food Guide — Friday Story Placement.</strong></div>
+              <div className="creative-provider-note"><Icon name="approval" /> This creative is tailored for <strong>the selected verified provider package.</strong></div>
               {saved ? <p className="inline-success" role="status">Caption saved locally.</p> : null}
             </section>
           </div>
@@ -130,10 +135,10 @@ export function CampaignJourney({
 
   return (
     <div className="app-layout">
-      <AppSidebar active="discovery" />
+      <AppSidebar active="discovery" venue={venue ?? activeCampaign.spot} />
       <main className="app-main discovery-page">
         <div className="discovery-header">
-          <div><span className="breadcrumb">Campaigns / Café Aura</span><h1>Provider Discovery</h1><p>Compare verified providers and packages to find the best fit for your campaign.</p></div>
+          <div><span className="breadcrumb">Campaigns / ${activeCampaign.spot}</span><h1>Provider Discovery</h1><p>Compare verified providers and packages to find the best fit for your campaign.</p></div>
           <ActionButton onClick={showCreative}><Icon name="spark" /> Review Creative</ActionButton>
         </div>
 
@@ -142,10 +147,10 @@ export function CampaignJourney({
             <span className="summary-photo" />
             <span><strong>{activeCampaign.spot}</strong><small>{activeCampaign.displayDate} · 7–9 PM</small><small>{activeCampaign.location}</small></span>
           </div>
-          <SummaryStat icon="target" label="Target Reservations" value="6" />
-          <SummaryStat icon="wallet" label="Budget Limit" value="₹5,000" />
-          <SummaryStat icon="seat" label="Unused Seats" value="12" />
-          <SummaryStat icon="wallet" label="Budget Remaining" value="₹2,000" />
+          <SummaryStat icon="target" label="Target Reservations" value={String(activeCampaign.targetReservations)} />
+          <SummaryStat icon="wallet" label="Budget Limit" value={formatMoney(activeCampaign.maximumBudgetPaise)} />
+          <SummaryStat icon="seat" label="Unused Seats" value={String(activeCampaign.unusedCapacity)} />
+          <SummaryStat icon="wallet" label="Budget Remaining" value={formatMoney(activeCampaign.remainingBudgetPaise)} />
           <SummaryStat icon="spark" label="Priority" value="High" />
         </section>
 
@@ -158,9 +163,10 @@ export function CampaignJourney({
         </div>
 
         <ProviderTable providers={visibleProviders} />
+        <AgentActivity lifecycle={lifecycle} compact />
         <div className="provider-footer"><span>Showing {visibleProviders.length} of {providers.length} providers</span><span className="pagination"><button type="button">‹</button><button className="active" type="button">1</button><button type="button">›</button></span></div>
         <div className="discovery-explanations">
-          <InfoPanel icon="spark" title="Why this provider?">Delhi Food Guide offers the strongest expected booking performance while remaining within the campaign&apos;s budget and CPA constraints.</InfoPanel>
+          <InfoPanel icon="spark" title="Why this provider?">{visibleProviders[0]?.provider ?? "The selected provider"} offers the strongest expected booking performance while remaining within the campaign&apos;s budget and CPA constraints.</InfoPanel>
           <InfoPanel icon="shield" title="Verified provider pool" tone="green">Providers in the demo fixture have deterministic verification/evidence data and are evaluated against the same campaign constraints.</InfoPanel>
         </div>
       </main>
@@ -196,7 +202,7 @@ function ProviderTable({ providers }: { providers: DemoProvider[] }) {
 
 function CampaignPoster({ creative, campaign }: { creative: CreativeData; campaign: DemoCampaign }) {
   return (
-    <div className="campaign-poster" aria-label="Café Aura campaign creative">
+    <div className="campaign-poster" aria-label={`${campaign.spot} campaign creative`}>
       <div className="poster-copy">
         <strong>{creative.headline}</strong>
         <b>{creative.discount}</b>

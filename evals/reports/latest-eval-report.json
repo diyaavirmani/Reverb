@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-27T15:11:14.933Z",
+  "timestamp": "2026-09-09T14:45:22.682Z",
   "mode": "fixture",
   "datasetCounts": {
     "application-fixture-lifecycle-happy-path": 5,
@@ -17,7 +17,7 @@
   },
   "safetyGuardrailResults": [],
   "latencySummary": {
-    "totalMs": 1,
+    "totalMs": 0,
     "averageCaseMs": 0
   },
   "failedCases": [],
@@ -41,7 +41,7 @@
           "score": 1,
           "summary": "All deterministic assertions passed.",
           "failures": [],
-          "latencyMs": 1,
+          "latencyMs": 0,
           "metadata": {
             "tags": []
           }

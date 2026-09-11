@@ -1,17 +1,19 @@
 import { SidebarLayout } from "../../../components/app-shell";
 import { CampaignForm } from "../../../components/campaign-form";
-import { creative, demoCampaign } from "../../../components/demo-data";
+import { createDeterministicCreative, demoCampaignForProfile } from "../../../components/demo-data";
 import { Icon } from "../../../components/icons";
-import { requireReverbPermission } from "../../../lib/auth/authorization";
+import { requireApprovedReverbPermission } from "../../../lib/auth/authorization";
 
 export default async function CreateCampaignPage() {
-  await requireReverbPermission("campaign:create");
+  const { profile } = await requireApprovedReverbPermission("campaign:create");
+  const campaign = demoCampaignForProfile(profile);
+  const creative = createDeterministicCreative(campaign, profile);
 
   return (
-    <SidebarLayout active="new">
+    <SidebarLayout active="new" venue={profile.venue.name}>
       <header className="create-header"><span className="breadcrumb">Campaigns / New Campaign</span><h1>Create Campaign</h1><p>Tell Reverb what capacity you need to recover and the constraints it must respect.</p></header>
       <div className="create-layout">
-        <CampaignForm campaign={demoCampaign} initialCaption={creative.caption} />
+        <CampaignForm campaign={campaign} initialCaption={creative.caption} />
         <aside className="constraint-panel card">
           <span className="constraint-icon"><Icon name="shield" /></span>
           <h2>Guardrails stay in control</h2>

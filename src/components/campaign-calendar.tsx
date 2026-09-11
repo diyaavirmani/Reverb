@@ -10,15 +10,16 @@ type CampaignCalendarProps = {
   displayDate: string;
   referenceDate: string | null;
   onSelect: (date: string) => void;
+  recurringWeekdays?: number[];
 };
 
-export function CampaignCalendar({ selectedDate, displayDate, referenceDate, onSelect }: CampaignCalendarProps) {
+export function CampaignCalendar({ selectedDate, displayDate, referenceDate, onSelect, recurringWeekdays = [5] }: CampaignCalendarProps) {
   const [viewMonthOverride, setViewMonthOverride] = useState<string | null>(null);
   const viewMonth = viewMonthOverride ?? shiftDemoCalendarMonth(selectedDate, 0);
 
   const calendar = useMemo(
-    () => getDemoCalendarMonth(viewMonth, selectedDate, referenceDate),
-    [referenceDate, selectedDate, viewMonth]
+    () => getDemoCalendarMonth(viewMonth, selectedDate, referenceDate, recurringWeekdays),
+    [recurringWeekdays, referenceDate, selectedDate, viewMonth]
   );
 
   function selectDate(date: string, selectable: boolean) {
@@ -56,14 +57,14 @@ export function CampaignCalendar({ selectedDate, displayDate, referenceDate, onS
         {calendar.days.map((day) => {
           const className = [
             day.selected ? "active" : "",
-            day.recurringFriday ? "scheduled" : "",
+            day.recurringQuietDay ? "scheduled" : "",
             !day.inCurrentMonth ? "outside-month" : "",
             day.past ? "past" : ""
           ].filter(Boolean).join(" ");
 
           return (
             <button
-              aria-label={`${day.date}${day.recurringFriday ? ", recurring Friday" : ""}`}
+              aria-label={`${day.date}${day.recurringQuietDay ? ", recurring quiet-slot day" : ""}`}
               aria-pressed={day.selected}
               className={className}
               disabled={!day.selectable}
@@ -76,7 +77,7 @@ export function CampaignCalendar({ selectedDate, displayDate, referenceDate, onS
           );
         })}
       </div>
-      <div className="calendar-legend"><span><i className="active" /> Campaign date</span><span><i className="scheduled" /> Other Fridays</span></div>
+      <div className="calendar-legend"><span><i className="active" /> Campaign date</span><span><i className="scheduled" /> Quiet-slot days</span></div>
     </>
   );
 }

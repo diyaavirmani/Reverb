@@ -52,17 +52,16 @@ describe("Clerk route wiring", () => {
 
     expect(landing).not.toContain("auth.protect");
     expect(landing).not.toContain("requireReverbPermission");
-    expect(landing).toContain('<Show when="signed-out">');
-    expect(landing).toContain('href="/sign-in?redirect_url=%2Fdashboard"');
-    expect(landing).toContain('<Show when="signed-in">');
-    expect(landing).toContain('href="/dashboard"');
+    expect(landing).toContain('const { userId } = await auth()');
+    expect(landing).toContain('href="/sign-in?redirect_url=%2Fapp-entry"');
+    expect(landing).toContain('href="/app-entry"');
   });
 
   it("protects every application page at the server resource", () => {
     for (const [path, permission] of Object.values(protectedPages)) {
       const page = source(path);
-      expect(page).toContain("requireReverbPermission");
-      expect(page).toContain('await requireReverbPermission("' + permission + '")');
+      expect(page).toContain("requireApprovedReverbPermission");
+      expect(page).toContain('await requireApprovedReverbPermission("' + permission + '")');
     }
   });
 
@@ -71,11 +70,11 @@ describe("Clerk route wiring", () => {
     const signUp = source("src/app/sign-up/[[...sign-up]]/page.tsx");
 
     expect(signIn).toContain("<SignIn");
-    expect(signIn).toContain('fallbackRedirectUrl="/dashboard"');
+    expect(signIn).toContain('fallbackRedirectUrl="/app-entry"');
     expect(signUp).toContain("<SignUp");
-    expect(signUp).toContain('fallbackRedirectUrl="/dashboard"');
-    expect(signIn).toContain('if (isAuthenticated) redirect("/dashboard")');
-    expect(signUp).toContain('if (isAuthenticated) redirect("/dashboard")');
+    expect(signUp).toContain('fallbackRedirectUrl="/app-entry"');
+    expect(signIn).toContain('if (isAuthenticated) redirect("/app-entry")');
+    expect(signUp).toContain('if (isAuthenticated) redirect("/app-entry")');
   });
 
   it("uses Clerk session plumbing and an authenticated account menu with sign out", () => {

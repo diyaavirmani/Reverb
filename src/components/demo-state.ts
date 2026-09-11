@@ -5,6 +5,7 @@ export const demoCampaignDraftStorageKey = "reverb-demo-campaign";
 
 export type DemoLifecycleState = {
   mode: string;
+  runId?: string;
   campaignId: string;
   finalStatus: string;
   selectedOptionId: string | null;
@@ -15,10 +16,10 @@ export type DemoLifecycleState = {
   ownerApprovalStatus: string;
   paymentSessionStatus: string;
   transactionStatus: string;
-  merchantOrderId: string;
+  merchantOrderId: string | null;
   activationStatus: string;
-  publicActivationUrl: string;
-  reservationId: string;
+  publicActivationUrl: string | null;
+  reservationId: string | null;
   isDemoBooking: boolean;
   performance: {
     confirmedReservationCount: number;
@@ -29,10 +30,59 @@ export type DemoLifecycleState = {
     estimatedRevenueRecoveredPaise: number;
   };
   auditEventCount: number;
+  options?: DemoLifecycleOption[];
+  executionTrace?: DemoExecutionTraceEvent[];
+  policyChecks?: DemoPolicyCheck[];
+};
+
+export type DemoLifecycleOption = {
+  id: string;
+  packageId: string;
+  score: number;
+  totalCostPaise: number;
+  expectedReservations: number;
+  expectedCpaPaise: number;
+  discountBps: number;
+  eligible: boolean;
+  deterministicChecks: {
+    budget: boolean;
+    deadline: boolean;
+    price: boolean;
+    merchant: boolean;
+    discount: boolean;
+    cpa: boolean;
+  };
+  rejectionReasons: string[];
+};
+
+export type DemoExecutionTraceEvent = {
+  id: string;
+  step: string;
+  status: "complete" | "waiting" | "failed";
+  startedAt: string;
+  endedAt: string | null;
+  durationMs: number | null;
+  summary: string;
+  inputSummary: string;
+  outputSummary: string | null;
+};
+
+export type DemoPolicyCheck = {
+  key: string;
+  label: string;
+  status: "PASS" | "FAIL" | "WAITING";
+  detail: string;
 };
 
 export type DemoCampaignDraft = {
   spot: string;
+  location?: string;
+  businessType?: string;
+  brandTone?: string;
+  audience?: string;
+  campaignContext?: "REGULAR_DAY" | "FESTIVAL" | "EVENT" | "TREND_LED" | "CUSTOM";
+  campaignContextDetail?: string;
+  offer?: string;
   unusedCapacity: number;
   date: string;
   startTime: string;
@@ -144,6 +194,19 @@ export function isCompletedLifecycle(value: unknown): value is DemoLifecycleStat
     lifecycle.activationStatus === "ACTIVE" &&
     typeof lifecycle.merchantOrderId === "string" &&
     typeof lifecycle.reservationId === "string"
+  );
+}
+
+export function isPreparedLifecycle(value: unknown): value is DemoLifecycleState {
+  if (!value || typeof value !== "object") return false;
+  const lifecycle = value as Partial<DemoLifecycleState>;
+  return (
+    typeof lifecycle.campaignId === "string" &&
+    lifecycle.finalStatus === "AWAITING_OWNER_APPROVAL" &&
+    lifecycle.ownerApprovalStatus === "PENDING" &&
+    lifecycle.qualityStatus === "PASSED" &&
+    Array.isArray(lifecycle.executionTrace) &&
+    Array.isArray(lifecycle.policyChecks)
   );
 }
 

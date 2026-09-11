@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { DemoCampaign } from "./demo-data";
 import { getDemoTodayDate, isPastDemoDate, isValidDemoDate } from "./demo-date";
-import { isCompletedLifecycle, loadDemoCampaignDraft, persistDemoSnapshot, type DemoCampaignDraft } from "./demo-state";
+import { isPreparedLifecycle, loadDemoCampaignDraft, persistDemoSnapshot, type DemoCampaignDraft } from "./demo-state";
 import { Icon } from "./icons";
 
 type CampaignFormProps = {
@@ -19,12 +19,16 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState(campaign.date);
+  const [campaignContext, setCampaignContext] = useState<NonNullable<DemoCampaignDraft["campaignContext"]>>("REGULAR_DAY");
   const [minimumDate, setMinimumDate] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const stored = loadDemoCampaignDraft();
-      if (stored) setDate(stored.date);
+      if (stored) {
+        setDate(stored.date);
+        if (stored.campaignContext) setCampaignContext(stored.campaignContext);
+      }
       setMinimumDate(getDemoTodayDate());
     }, 0);
     return () => window.clearTimeout(timeoutId);
@@ -45,7 +49,11 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
       targetReservations: Number(values.get("targetReservations")),
       maximumBudgetPaise: Number(values.get("maximumBudget")) * 100,
       maximumDiscountPercent: Number(values.get("maximumDiscount")),
-      maximumCpaPaise: Number(values.get("maximumCpa")) * 100
+      maximumCpaPaise: Number(values.get("maximumCpa")) * 100,
+      location: campaign.location,
+      offer: campaign.offer,
+      campaignContext,
+      campaignContextDetail: String(values.get("campaignContextDetail") ?? "").trim()
     };
 
     if (!isValidDemoDate(draft.date) || isPastDemoDate(draft.date)) {
@@ -59,19 +67,13 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          prepareOnly: true,
           ownerMessage: `Fill ${draft.date} from ${draft.startTime} to ${draft.endTime} with ${draft.unusedCapacity} unused seats, target ${draft.targetReservations} reservations, budget Rs ${draft.maximumBudgetPaise / 100}, maximum discount ${draft.maximumDiscountPercent}%, and maximum CPA Rs ${draft.maximumCpaPaise / 100}.`,
-          reservation: {
-            customerName: "Demo Guest",
-            customerContact: "demo@example.test",
-            partySize: 2,
-            trackingCode: `demo_campaign_${draft.date.replaceAll("-", "")}`,
-            isDemoBooking: true
-          }
         })
       });
       const payload = (await response.json()) as unknown;
 
-      if (!response.ok || !isCompletedLifecycle(payload)) {
+      if (!response.ok || !isPreparedLifecycle(payload)) {
         const message = payload && typeof payload === "object" && "error" in payload
           ? String((payload as { error: unknown }).error)
           : "Reverb could not prepare this demo campaign. Please try again.";
@@ -142,7 +144,19 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
           <span>Maximum CPA</span>
           <span className="input-prefix"><b>₹</b><input name="maximumCpa" type="number" min="1" defaultValue={campaign.maximumCpaPaise / 100} required /></span>
         </label>
+        <label className="field field-wide">
+          <span>Campaign Context</span>
+          <select name="campaignContext" value={campaignContext} onChange={(event) => setCampaignContext(event.target.value as NonNullable<DemoCampaignDraft["campaignContext"]>)}>
+            <option value="REGULAR_DAY">Regular Day</option>
+            <option value="FESTIVAL">Festival / Occasion</option>
+            <option value="EVENT">Event</option>
+            <option value="TREND_LED">Trend-led</option>
+            <option value="CUSTOM">Custom</option>
+          </select>
+        </label>
+        {campaignContext !== "REGULAR_DAY" ? <label className="field field-wide"><span>{campaignContext === "TREND_LED" ? "Demo trend or context" : "Context details"}</span><input name="campaignContextDetail" placeholder="Add the occasion, event, or direction for this campaign" required={campaignContext === "CUSTOM"} /></label> : null}
       </div>
+      {campaignContext === "TREND_LED" ? <p className="campaign-context-note"><Icon name="spark" /> Demo trend research uses deterministic seasonal context; no live internet trend provider is connected.</p> : null}
       <div className="form-footer">
         <p><Icon name="shield" /> Deterministic checks protect budget, CPA, discount, and provider eligibility.</p>
         <button className="button button-primary" type="submit" disabled={submitting}>

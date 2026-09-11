@@ -1,24 +1,29 @@
-# Reverb Fill
+# Reverb
 
-**Fill quiet slots at local spots.**
+**Turn quiet capacity into measurable revenue.**
 
-Reverb Fill is a fixture-first agentic-commerce showcase for cafes and restaurants with underbooked time slots. It creates a campaign, recommends a verified promotion package, previews the creative, simulates owner approval and commerce, records a labelled demo reservation, and reports recovered capacity.
+Reverb is a fixture-first campaign product for cafes and restaurants with underbooked time slots. It authenticates an owner, stores a compact venue profile in Clerk, analyzes safe public first-party website metadata, prepares a venue intelligence brief, and turns owner-approved quiet capacity into a measurable campaign.
 
 Fixture/demo commerce is simulated. No real money moves in fixture mode.
 
-## Product Concept
+## Product Flow
 
-Underbooked capacity is expiring inventory. A table, seat, or booking slot loses commercial value when the time passes. Reverb Fill helps a local Spot owner recover that value by buying verified local distribution under deterministic constraints.
+Underbooked capacity is expiring inventory. A table, seat, or booking slot loses commercial value when the time passes. Reverb helps a local venue owner recover that value by buying verified local distribution under deterministic constraints.
 
-The product flow exposed in the UI is:
+The current product flow exposed in the UI is:
 
 ```text
-Create Campaign
--> Recommended Promotion
--> Campaign Preview
--> Approval / Demo Transaction
+Landing
+-> Clerk authentication
+-> Venue onboarding
+-> Venue Intelligence Brief
+-> Personalized Dashboard
+-> Create Campaign
+-> Verified Discovery and Agent Activity
+-> Creative Review
+-> Owner Approval / Demo Transaction
 -> Campaign Active
--> Reservation
+-> Reservations
 -> Performance
 ```
 
@@ -136,6 +141,19 @@ DEMO_SPOT_ID=spot_quiet_cup_cafe
 DEMO_TIMEZONE=Asia/Kolkata
 ```
 
+Authentication also requires Clerk values in `.env` or `.env.local`:
+
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/app-entry
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/app-entry
+```
+
+Keep Clerk secret values in local or deployment environment configuration. Do not commit `.env.local`.
+
 Start the app:
 
 ```powershell
@@ -203,6 +221,10 @@ npm run validate:n8n
 - `POST /api/demo/report`
 - `POST /api/reservations`
 - `GET /api/campaigns/{campaignId}/performance`
+- `GET /api/venue/profile`
+- `PUT /api/venue/profile`
+- `POST /api/venue/analyze`
+- `POST /api/venue/brief/approve`
 - `GET /api/health`
 
 The backend still includes additional typed routes for AI, provider verification, approval, Reach Exchange, and messaging adapters, but the frontend showcase does not require live external services.
@@ -235,17 +257,23 @@ Outputs are written under:
 tableau/
 ```
 
-## Limitations
+## Real vs Demo
 
-- Fixture transactions are not real Prava transactions.
-- Final judging with real payments must use a real Prava sandbox flow.
+- Fixture transactions are deterministic demo transactions, not real payments.
+- A production payment provider can be added behind the existing adapter boundary later.
 - Reach Exchange is a hackathon-built sandbox merchant.
 - One provider should later be backed by real evidence or a provider interview.
 - The current showcase is single-Spot and single-demo-campaign oriented.
-- Authentication and production persistence are intentionally excluded.
+- Clerk authentication, owner identity, venue profile, website metadata analysis, lifecycle orchestration, policy evaluation, approval state, and API communication are real.
+- Provider marketplace records, fixture transaction, demo reservation outcomes, and trend context are deterministic fixture/demo data.
+- Social channels are preferences only. A channel is never presented as connected or published without a configured publisher.
+
+## Deployment Notes
+
+The app is suitable for a Vercel deployment in fixture mode when the required Clerk and runtime environment variables are configured. Venue profiles are stored in the authenticated Clerk user's private metadata; the fixture lifecycle remains deterministic and does not depend on server-process memory. Configure the production domain and Clerk allowed redirect URLs for `/sign-in`, `/sign-up`, and `/app-entry` in the Clerk Dashboard.
 
 ## Pre-Existing Work
 
-Generic campaign-generation and Google automation patterns existed before the hackathon. Reverb Fill's product flow, deterministic commerce guardrails, provider scoring, fixture Reach Exchange sandbox, reservation attribution, and demo reporting are new hackathon work.
+Generic campaign-generation and Google automation patterns existed before the hackathon. Reverb's product flow, deterministic commerce guardrails, provider scoring, fixture Reach Exchange sandbox, reservation attribution, and demo reporting are new hackathon work.
 
 See `docs/PRE_EXISTING_WORK.md`.

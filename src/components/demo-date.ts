@@ -17,6 +17,7 @@ export type DemoCalendarDay = {
   inCurrentMonth: boolean;
   selected: boolean;
   recurringFriday: boolean;
+  recurringQuietDay: boolean;
   past: boolean;
   selectable: boolean;
 };
@@ -31,6 +32,18 @@ export type DemoCalendarMonth = {
 
 export function getDemoCampaignSchedule(baseDate = new Date()): DemoCampaignSchedule {
   return getDemoCampaignScheduleForDate(formatDateInputValue(getNextFriday(baseDate)));
+}
+
+export function getDemoCampaignScheduleForWeekday(
+  weekday: number,
+  baseDate = new Date(),
+  timezone = demoTimezone
+): DemoCampaignSchedule {
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) throw new Error("Weekday must be between 0 and 6.");
+  const calendarDate = getDemoCalendarDate(baseDate, timezone);
+  const normalizedBase = new Date(Date.UTC(calendarDate.year, calendarDate.month - 1, calendarDate.day));
+  const daysUntil = (weekday - normalizedBase.getUTCDay() + 7) % 7 || 7;
+  return getDemoCampaignScheduleForDate(formatDateInputValue(new Date(normalizedBase.getTime() + daysUntil * dayInMilliseconds)));
 }
 
 export function getDemoCampaignScheduleForDate(date: string): DemoCampaignSchedule {
@@ -49,7 +62,8 @@ export function getDemoCampaignScheduleForDate(date: string): DemoCampaignSchedu
 export function getDemoCalendarMonth(
   viewDate: string,
   selectedDate: string,
-  referenceDate: Date | string | null = null
+  referenceDate: Date | string | null = null,
+  recurringWeekdays: number[] = [friday]
 ): DemoCalendarMonth {
   const view = parseDateOnly(viewDate);
   const year = view.getUTCFullYear();
@@ -69,6 +83,7 @@ export function getDemoCalendarMonth(
     const selected = date === selectedDate;
     const past = today !== null && date < today;
 
+    const recurringQuietDay = inCurrentMonth && recurringWeekdays.includes(current.getUTCDay()) && !selected;
     return {
       date,
       day: current.getUTCDate(),
@@ -76,6 +91,7 @@ export function getDemoCalendarMonth(
       inCurrentMonth,
       selected,
       recurringFriday: inCurrentMonth && current.getUTCDay() === friday && !selected,
+      recurringQuietDay,
       past,
       selectable: !past
     };
@@ -99,14 +115,14 @@ export function shiftDemoCalendarMonth(viewDate: string, offset: number): string
   return formatDateInputValue(new Date(Date.UTC(view.getUTCFullYear(), view.getUTCMonth() + offset, 1)));
 }
 
-export function getDemoTodayDate(referenceDate = new Date()): string {
-  const calendarDate = getDemoCalendarDate(referenceDate);
+export function getDemoTodayDate(referenceDate = new Date(), timezone = demoTimezone): string {
+  const calendarDate = getDemoCalendarDate(referenceDate, timezone);
   return formatDateInputValue(new Date(Date.UTC(calendarDate.year, calendarDate.month - 1, calendarDate.day)));
 }
 
-export function isPastDemoDate(date: string, referenceDate: Date | string = new Date()): boolean {
+export function isPastDemoDate(date: string, referenceDate: Date | string = new Date(), timezone = demoTimezone): boolean {
   parseDateOnly(date);
-  const today = referenceDate instanceof Date ? getDemoTodayDate(referenceDate) : formatDateInputValue(parseDateOnly(referenceDate));
+  const today = referenceDate instanceof Date ? getDemoTodayDate(referenceDate, timezone) : formatDateInputValue(parseDateOnly(referenceDate));
   return date < today;
 }
 
@@ -133,9 +149,9 @@ function getNextFriday(baseDate: Date): Date {
   return new Date(normalizedBase.getTime() + daysUntilFriday * dayInMilliseconds);
 }
 
-function getDemoCalendarDate(baseDate: Date): { year: number; month: number; day: number } {
+function getDemoCalendarDate(baseDate: Date, timezone = demoTimezone): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: demoTimezone,
+    timeZone: timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit"

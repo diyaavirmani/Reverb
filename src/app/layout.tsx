@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "../components/app-shell";
 import "./globals.css";
+import "./reverb-mvp.css";
 
 export const metadata: Metadata = {
   title: "Reverb",
@@ -22,8 +23,8 @@ export default function RootLayout({ children }: RootLayoutProps) {
           afterSignOutUrl="/"
           signInUrl="/sign-in"
           signUpUrl="/sign-up"
-          signInFallbackRedirectUrl="/dashboard"
-          signUpFallbackRedirectUrl="/dashboard"
+          signInFallbackRedirectUrl="/app-entry"
+          signUpFallbackRedirectUrl="/app-entry"
         >
           <AppShell>{children}</AppShell>
         </ClerkProvider>

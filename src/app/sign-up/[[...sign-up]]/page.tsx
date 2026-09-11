@@ -6,7 +6,7 @@ import { AuthShell } from "../../../components/auth-shell";
 
 export default async function SignUpPage() {
   const { isAuthenticated } = await auth();
-  if (isAuthenticated) redirect("/dashboard");
+  if (isAuthenticated) redirect("/app-entry");
 
   return (
     <AuthShell title="Create your Reverb account" description="Start managing campaigns with a secure Reverb session.">
@@ -14,8 +14,8 @@ export default async function SignUpPage() {
         path="/sign-up"
         routing="path"
         signInUrl="/sign-in"
-        fallbackRedirectUrl="/dashboard"
-        signInFallbackRedirectUrl="/dashboard"
+        fallbackRedirectUrl="/app-entry"
+        signInFallbackRedirectUrl="/app-entry"
         appearance={{ variables: { colorPrimary: "#155eef", borderRadius: "0.5rem" } }}
       />
     </AuthShell>

@@ -6,7 +6,7 @@ import { AuthShell } from "../../../components/auth-shell";
 
 export default async function SignInPage() {
   const { isAuthenticated } = await auth();
-  if (isAuthenticated) redirect("/dashboard");
+  if (isAuthenticated) redirect("/app-entry");
 
   return (
     <AuthShell title="Welcome back" description="Sign in to continue to Reverb.">
@@ -14,8 +14,8 @@ export default async function SignInPage() {
         path="/sign-in"
         routing="path"
         signUpUrl="/sign-up"
-        fallbackRedirectUrl="/dashboard"
-        signUpFallbackRedirectUrl="/dashboard"
+        fallbackRedirectUrl="/app-entry"
+        signUpFallbackRedirectUrl="/app-entry"
         appearance={{ variables: { colorPrimary: "#155eef", borderRadius: "0.5rem" } }}
       />
     </AuthShell>

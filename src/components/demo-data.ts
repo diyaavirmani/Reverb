@@ -1,5 +1,7 @@
-import { getDemoCampaignSchedule, getDemoCampaignScheduleForDate } from "./demo-date";
-import type { DemoCampaignDraft } from "./demo-state";
+import type { ReverbVenueProfile } from "../lib/venue/profile";
+import { weekdayToIndex } from "../lib/venue/profile";
+import { getDemoCampaignSchedule, getDemoCampaignScheduleForDate, getDemoCampaignScheduleForWeekday } from "./demo-date";
+import type { DemoCampaignDraft, DemoLifecycleState } from "./demo-state";
 
 const demoSchedule = getDemoCampaignSchedule();
 
@@ -27,10 +29,62 @@ export const demoCampaign = {
   worstCaseCpaPaise: 75000,
   bestOptionScore: 92,
   providersChecked: 18,
-  status: "Awaiting Approval"
+  status: "Awaiting Approval",
+  campaignContext: "REGULAR_DAY"
 };
 
 export type DemoCampaign = typeof demoCampaign;
+
+export function createDeterministicCreative(campaign: DemoCampaign, profile?: ReverbVenueProfile | null) {
+  const venueName = campaign.spot;
+  const offering = profile?.brand.cuisineOrOffering || "sharing platters";
+  const tone = profile?.brand.tone || "Casual";
+  const hashtag = venueName.replace(/[^a-z0-9]/gi, "");
+  return {
+    headline: campaign.campaignContext === "FESTIVAL" ? "MAKE IT A MOMENT" : "QUIET HOURS, GOOD VIBES",
+    discount: `${campaign.maximumDiscountPercent}% OFF`,
+    offer: offering.toUpperCase().slice(0, 40),
+    time: `${formatTime(campaign.startTime)} – ${formatTime(campaign.endTime)}`,
+    cta: "BOOK YOUR TABLE NOW!",
+    caption: `Friday plans?\\n\\nJoin us between ${formatTime(campaign.startTime)} – ${formatTime(campaign.endTime)} and enjoy ${campaign.maximumDiscountPercent}% off ${offering} at ${venueName}.\\n\\n${tone} food. Good vibes. Good company.\\n\\n#${hashtag} #GoodFood`
+  };
+}
+
+export function demoCampaignForProfile(profile: ReverbVenueProfile | null, owner?: string | null): DemoCampaign {
+  if (!profile) return demoCampaign;
+  const quietSlot = profile.operations.quietSlots[0];
+  const schedule = getDemoCampaignScheduleForWeekday(
+    weekdayToIndex(quietSlot.day),
+    new Date(),
+    profile.venue.timezone
+  );
+  const start = formatTime(quietSlot.startTime);
+  const end = formatTime(quietSlot.endTime);
+  const spend = Math.min(480000, profile.campaignDefaults.maxBudgetPaise);
+  const offering = profile.brand.cuisineOrOffering || "selected items";
+  return {
+    ...demoCampaign,
+    spot: profile.venue.name,
+    owner: owner || "Venue owner",
+    location: `${profile.venue.address}, ${profile.venue.city}`,
+    title: `${profile.venue.name} — ${quietSlot.day} capacity campaign`,
+    slot: `${quietSlot.day} ${start}–${end}`,
+    date: schedule.date,
+    displayDate: schedule.displayDate,
+    dateAndTime: `${schedule.displayDate} · ${start}–${end}`,
+    reservationTime: schedule.reservationTime,
+    startTime: quietSlot.startTime,
+    endTime: quietSlot.endTime,
+    unusedCapacity: quietSlot.estimatedUnusedSeats,
+    targetReservations: Math.max(1, Math.ceil(quietSlot.estimatedUnusedSeats / 2)),
+    maximumBudgetPaise: profile.campaignDefaults.maxBudgetPaise,
+    maximumDiscountPercent: profile.campaignDefaults.maxDiscountPct,
+    maximumCpaPaise: profile.campaignDefaults.maxCpaPaise,
+    selectedSpendPaise: spend,
+    remainingBudgetPaise: Math.max(0, profile.campaignDefaults.maxBudgetPaise - spend),
+    offer: `${profile.campaignDefaults.maxDiscountPct}% off ${offering}`
+  };
+}
 
 export function applyDemoCampaignDraft(campaign: DemoCampaign, draft: DemoCampaignDraft): DemoCampaign {
   const schedule = getDemoCampaignScheduleForDate(draft.date);
@@ -43,6 +97,25 @@ export function applyDemoCampaignDraft(campaign: DemoCampaign, draft: DemoCampai
     dateAndTime: `${schedule.displayDate} · 7–9 PM`,
     reservationTime: schedule.reservationTime
   };
+}
+
+export function applyDemoLifecycle(campaign: DemoCampaign, lifecycle: DemoLifecycleState | null): DemoCampaign {
+  const selected = lifecycle?.options?.find((option) => option.id === lifecycle.selectedOptionId);
+  if (!selected) return campaign;
+  return {
+    ...campaign,
+    selectedSpendPaise: selected.totalCostPaise,
+    remainingBudgetPaise: Math.max(0, campaign.maximumBudgetPaise - selected.totalCostPaise),
+    worstCaseCpaPaise: selected.expectedCpaPaise,
+    bestOptionScore: selected.score
+  };
+}
+
+function formatTime(value: string): string {
+  const [hourValue, minute] = value.split(":");
+  const hour = Number(hourValue);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  return `${hour % 12 || 12}${minute === "00" ? "" : `:${minute}`} ${suffix}`;
 }
 
 export type DemoProvider = {
