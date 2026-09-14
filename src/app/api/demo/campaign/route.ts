@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
 import {
   demoCampaignRequestSchema,
   demoErrorResponse,
@@ -9,6 +10,9 @@ import {
 } from "../_shared";
 
 export async function POST(request: Request) {
+  const access = await requireReverbApiPermission("campaign:create");
+  if (access instanceof NextResponse) return access;
+
   const json = await parseJsonRequest(request);
 
   if (!json.ok) {
@@ -22,7 +26,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(await runCampaignStage(parsedRequest.data));
+    return NextResponse.json(
+      await runCampaignStage({ ...parsedRequest.data, requestedByOwnerId: access?.userId })
+    );
   } catch (error) {
     return demoErrorResponse(error);
   }

@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: reverb
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        value: /sign-in
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        value: /sign-up
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
+        value: /app-entry
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL
+        value: /app-entry
+      - key: USE_FIXTURES
+        value: "true"
+      - key: APP_ENV
+        value: production
+      - key: APP_URL
+        sync: false
+      - key: DEMO_SPOT_ID
+        value: spot_quiet_cup_cafe
+      - key: DEMO_TIMEZONE
+        value: Asia/Kolkata

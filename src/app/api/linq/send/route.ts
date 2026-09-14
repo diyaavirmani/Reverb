@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
 import { IntegrationError, createLinqAdapter } from "../../../../lib/adapters";
 import {
   LinqSendMessageRequestSchema,
@@ -9,6 +10,9 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const access = await requireReverbApiPermission("campaign:review");
+  if (access instanceof NextResponse) return access;
+
   let body: unknown;
 
   try {

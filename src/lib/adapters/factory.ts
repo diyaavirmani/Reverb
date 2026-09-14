@@ -12,7 +12,7 @@ import {
   LivePravaAdapter,
   LiveSensoAdapter
 } from "./live";
-import { loadRuntimeConfig, type RuntimeConfig } from "./runtime-config";
+import { loadRuntimeConfig } from "./runtime-config";
 import type {
   IntegrationAdapters,
   LinqAdapter,

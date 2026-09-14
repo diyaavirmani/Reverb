@@ -165,7 +165,7 @@ describe("Senso adapter", () => {
   });
 
   it("rejects live responses that contain no sources but claim verification", async () => {
-    const fetchMock = vi.fn(async (_input: string, _init: RequestInit) =>
+    const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({
           ...liveVerifiedResponse,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
 import {
   demoErrorResponse,
   demoReportRequestSchema,
@@ -9,6 +10,9 @@ import {
 } from "../_shared";
 
 export async function POST(request: Request) {
+  const access = await requireReverbApiPermission("analytics:read");
+  if (access instanceof NextResponse) return access;
+
   const json = await parseJsonRequest(request);
 
   if (!json.ok) {

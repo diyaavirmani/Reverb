@@ -6,7 +6,6 @@ import { LivePravaAdapter, type PravaHttpClient } from "../src/lib/adapters/live
 import {
   PravaCreateSessionResultSchema,
   PravaPaymentResultSchema,
-  PravaReportCheckoutOutcomeResultSchema,
   type PravaCreateSessionRequest,
   type PravaReportCheckoutOutcomeRequest
 } from "../src/schemas";

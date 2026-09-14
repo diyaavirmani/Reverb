@@ -9,7 +9,6 @@ import {
   ReservationSubmissionSchema,
   type Campaign,
   type CampaignPerformanceReport,
-  type Reservation,
   type ReservationSubmission,
   type ReservationSubmissionResult
 } from "../../schemas";

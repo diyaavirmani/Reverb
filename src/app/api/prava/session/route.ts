@@ -1,12 +1,16 @@
 ﻿import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
 import { IntegrationError, createPravaAdapter } from "../../../../lib/adapters";
 import { PravaCreateSessionRequestSchema } from "../../../../schemas";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const access = await requireReverbApiPermission("campaign:approve");
+  if (access instanceof NextResponse) return access;
+
   const body = await parseJson(request);
 
   if (!body.ok) {

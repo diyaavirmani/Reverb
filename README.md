@@ -119,16 +119,22 @@ Reverb Reach Exchange is a hackathon-built sandbox merchant for quotes, checkout
 
 ## Local Setup
 
+Requirements:
+
+- Node.js 22 or newer
+- npm 10 or newer
+- A Clerk application for authentication
+
 Install dependencies:
 
-```powershell
+```bash
 npm install
 ```
 
 Create local environment file:
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env.local
 ```
 
 Minimum fixture values for local UI:
@@ -156,7 +162,7 @@ Keep Clerk secret values in local or deployment environment configuration. Do no
 
 Start the app:
 
-```powershell
+```bash
 npm run dev
 ```
 
@@ -168,11 +174,26 @@ http://localhost:3000
 
 ## Deploying the Showcase
 
+The repository includes a Render blueprint in `render.yaml`. Create a new Render
+Web Service from this repository and either apply that blueprint or use the same
+commands:
+
+```text
+Build command: npm ci && npm run build
+Start command: npm start
+Health check: /api/health
+```
+
+Render must use the Node runtime. Do not create this service as Python. Configure
+the two Clerk keys as Render secrets; never place their values in the repository.
+
 Minimum deployment variables for the fixture showcase:
 
 ```env
 USE_FIXTURES=true
 APP_ENV=production
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
 ```
 
 Recommended non-secret additions:
@@ -231,7 +252,7 @@ The backend still includes additional typed routes for AI, provider verification
 
 ## Test Commands
 
-```powershell
+```bash
 npm run typecheck
 npm run lint
 npm run validate:fixtures

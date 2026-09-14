@@ -20,9 +20,6 @@ import {
   type CampaignIntent,
   type DecisionExplanation,
   type OpenAIQualityReview,
-  type PravaCreateSessionResult,
-  type PravaPaymentResult,
-  type PravaReportCheckoutOutcomeResult,
   type SensoProviderVerification
 } from "../../../schemas";
 import { hashPayload } from "../../security/signatures";
