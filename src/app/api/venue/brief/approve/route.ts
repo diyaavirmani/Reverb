@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { requireReverbPermission } from "../../../../../lib/auth/authorization";
+import { requireReverbApiPermission } from "../../../../../lib/auth/api-authorization";
 import { saveReverbProfile } from "../../../../../lib/venue/clerk-profile";
 import { reverbVenueProfileSchema } from "../../../../../lib/venue/profile";
 
 export async function POST(request: Request) {
-  const { userId } = await requireReverbPermission("venue:manage");
+  const access = await requireReverbApiPermission("venue:manage");
+  if (access instanceof NextResponse) return access;
+
+  const userId = access?.userId ?? "test_user";
   let value: unknown;
   try {
     value = await request.json();

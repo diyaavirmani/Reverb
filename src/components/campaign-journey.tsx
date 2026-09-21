@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { AppSidebar, ApplicationHeader } from "./app-shell";
 import { AgentActivity } from "./agent-activity";
@@ -29,6 +30,7 @@ export function CampaignJourney({
   creative: CreativeData;
   venue?: string;
 }) {
+  const router = useRouter();
   const [stage, setStage] = useState<"discovery" | "creative">("discovery");
   const [activeCampaign, setActiveCampaign] = useState(campaign);
   const [tab, setTab] = useState<"comparison" | "shortlist">("comparison");
@@ -69,7 +71,7 @@ export function CampaignJourney({
 
   function proceedToApproval() {
     updateDemoSnapshot((current) => ({ ...current, creativeCaption: caption, stage: "approval" }));
-    window.location.href = "/approval";
+    router.push("/approval");
   }
 
   if (stage === "creative") {

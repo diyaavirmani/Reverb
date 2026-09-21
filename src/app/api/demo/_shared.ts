@@ -231,6 +231,7 @@ export async function runCommerceStage(input: z.infer<typeof demoCommerceRequest
 
   const context = await createDemoContext(input);
   const campaignId = input.campaignId ?? (await prepareCampaign(context)).campaignId;
+  await assertCampaignOwner(context.repository, campaignId, input.requestedByOwnerId);
   const approval = await context.service.recordOwnerApproval({
     campaignId,
     ownerId: context.requestedByOwnerId,
@@ -256,8 +257,12 @@ export async function runCommerceStage(input: z.infer<typeof demoCommerceRequest
   };
 }
 
-export async function runReservationStage(input: z.infer<typeof demoReservationRequestSchema>) {
-  const { service } = await createDemoContext();
+export async function runReservationStage(
+  input: z.infer<typeof demoReservationRequestSchema>,
+  requestedByOwnerId?: string
+) {
+  const { service, repository } = await createDemoContext({ requestedByOwnerId });
+  await assertCampaignOwner(repository, input.campaignId, requestedByOwnerId);
   const trackingCode = input.trackingCode ?? `demo_tracking_${input.campaignId}`;
   const reservation = await service.recordReservation({
     campaignId: input.campaignId,
@@ -279,8 +284,12 @@ export async function runReservationStage(input: z.infer<typeof demoReservationR
   };
 }
 
-export async function runReportStage(input: z.infer<typeof demoReportRequestSchema>) {
-  const { service, repository } = await createDemoContext();
+export async function runReportStage(
+  input: z.infer<typeof demoReportRequestSchema>,
+  requestedByOwnerId?: string
+) {
+  const { service, repository } = await createDemoContext({ requestedByOwnerId });
+  await assertCampaignOwner(repository, input.campaignId, requestedByOwnerId);
   const summary = await service.getCampaignSummary(input.campaignId);
   const reservations = await repository.listReservations(input.campaignId);
   const merchantOrder =
@@ -298,6 +307,22 @@ export async function runReportStage(input: z.infer<typeof demoReportRequestSche
     merchantOrder,
     reservationCount: reservations.length
   };
+}
+
+async function assertCampaignOwner(
+  repository: StorageRepository,
+  campaignId: string,
+  requestedByOwnerId?: string
+): Promise<void> {
+  if (!requestedByOwnerId) {
+    return;
+  }
+
+  const campaign = await repository.getCampaign(campaignId);
+
+  if (campaign === null || campaign.requestedByOwnerId !== requestedByOwnerId) {
+    throw new CampaignServiceError("CAMPAIGN_NOT_FOUND", "Campaign was not found.", 404);
+  }
 }
 
 export async function runFullLifecycle(input: z.infer<typeof demoLifecycleRequestSchema>) {

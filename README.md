@@ -104,6 +104,8 @@ The approval screen uses a fixture transaction and labels it as a **Demo transac
 
 Reverb Reach Exchange is a hackathon-built sandbox merchant for quotes, checkout, delivery, and activation.
 
+`POST /api/reservations` is intentionally public because it represents a customer booking callback. It uses strict Zod parsing, an 8 KB request-body limit, and an in-memory per-IP rate limit; other campaign, venue, Reach, and Prava APIs require Clerk-backed Reverb permissions.
+
 ## Guardrails
 
 - Money is stored as integer paise.

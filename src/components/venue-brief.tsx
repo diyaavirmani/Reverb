@@ -19,7 +19,11 @@ export function VenueBrief({ initialProfile }: { initialProfile: ReverbVenueProf
     setError(null);
     try {
       const response = await fetch("/api/venue/brief/approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(profile) });
-      const payload = await response.json() as { error?: string };
+      if (response.status === 401) {
+        router.push("/sign-in");
+        return;
+      }
+      const payload = await readJsonPayload<{ error?: string }>(response);
       if (!response.ok) throw new Error(payload.error ?? "Reverb could not approve this brief.");
       router.push("/dashboard");
       router.refresh();
@@ -67,4 +71,11 @@ function BriefFact({ label, value }: { label: string; value: string }) { return 
 function InferenceList({ profile, setProfile }: { profile: ReverbVenueProfile; setProfile: (profile: ReverbVenueProfile) => void }) { return <div className="brief-inferences">{profile.analysis.inferences.map((inference, index) => <div key={`${inference}-${index}`}><span><small>Reverb inference</small>{inference}</span><button type="button" onClick={() => setProfile({ ...profile, analysis: { ...profile.analysis, inferences: profile.analysis.inferences.filter((_, inferenceIndex) => inferenceIndex !== index) } })}>Remove</button></div>)}</div>; }
 function formatAnalysisDate(value?: string) { return value ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(new Date(value)) : "Not analyzed"; }
 function money(paise: number) { return `₹${(paise / 100).toLocaleString("en-IN")}`; }
+async function readJsonPayload<T>(response: Response): Promise<T> {
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    throw new Error("Reverb returned an unexpected response.");
+  }
+
+  return response.json() as Promise<T>;
+}
 function briefMarkdown(profile: ReverbVenueProfile) { return `# Venue Intelligence Brief\n\n## ${profile.venue.name}\n\n- Business type: ${profile.venue.businessType}\n- Location: ${profile.venue.address}, ${profile.venue.city}\n- Capacity: ${profile.venue.capacity}\n- Brand summary: ${profile.brand.summary || "Not provided"}\n- Offering: ${profile.brand.cuisineOrOffering || "Not provided"}\n- Audience: ${profile.brand.audience || "Not provided"}\n- Tone: ${profile.brand.tone}\n\n## Quiet capacity\n${profile.operations.quietSlots.map((slot) => `- ${slot.day}, ${slot.startTime}-${slot.endTime}: ${slot.estimatedUnusedSeats} unused seats`).join("\n")}\n\n## Guardrails\n- Maximum budget: ${money(profile.campaignDefaults.maxBudgetPaise)}\n- Maximum discount: ${profile.campaignDefaults.maxDiscountPct}%\n- Maximum CPA: ${money(profile.campaignDefaults.maxCpaPaise)}\n- Approval: ${approvalModeLabel(profile.campaignDefaults.approvalMode)}\n\n## Evidence\n${profile.analysis.facts.map((fact) => `- ${fact}`).join("\n") || "- Owner-entered data only"}\n`; }

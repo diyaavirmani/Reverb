@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(await runReportStage(parsedRequest.data));
+    return NextResponse.json(await runReportStage(parsedRequest.data, access?.userId));
   } catch (error) {
     return demoErrorResponse(error);
   }

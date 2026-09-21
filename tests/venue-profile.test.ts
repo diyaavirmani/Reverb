@@ -51,6 +51,24 @@ describe("safe public venue analysis", () => {
     await expect(validatePublicWebsiteUrl("https://venue.example", async () => [{ address: "192.168.1.2", family: 4 }])).rejects.toMatchObject({ code: "PRIVATE_HOST" });
   });
 
+  it.each([
+    "http://[::1]",
+    "http://[::ffff:7f00:1]",
+    "http://[::ffff:127.0.0.1]",
+    "http://[fe80::1]",
+    "http://[64:ff9b::7f00:1]",
+    "http://[2002:7f00:1::]",
+    "http://[::ffff:a9fe:a9fe]",
+    "http://169.254.169.254",
+    "http://0x7f.1",
+    "http://2130706433",
+    "https://quiet-cup.internal"
+  ])("rejects private host %s with PRIVATE_HOST", async (url) => {
+    await expect(
+      validatePublicWebsiteUrl(url, async () => [{ address: "93.184.216.34", family: 4 }])
+    ).rejects.toMatchObject({ code: "PRIVATE_HOST" });
+  });
+
   it("extracts bounded metadata and labels inferred themes separately", () => {
     const result = extractVenueMetadata(
       "<html><head><title>Cedar Room Cafe</title><meta name='description' content='Cozy coffee and continental brunch for the community'><meta property='og:image' content='/social.jpg'></head><body><h1>Cedar Room</h1><h2>Coffee and brunch</h2><p>Cozy coffee, coffee, brunch and community.</p></body></html>",

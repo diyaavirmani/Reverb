@@ -4,7 +4,9 @@ import { NextResponse } from "next/server";
 import { hasReverbPermission, resolveReverbRole, type ReverbPermission } from "./roles";
 
 export async function requireReverbApiPermission(permission: ReverbPermission) {
-  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
+  assertNoProductionAuthBypass();
+
+  if (process.env.NODE_ENV === "test") {
     return null;
   }
 
@@ -21,4 +23,10 @@ export async function requireReverbApiPermission(permission: ReverbPermission) {
   }
 
   return { userId: session.userId, role };
+}
+
+function assertNoProductionAuthBypass(): void {
+  if (process.env.NODE_ENV === "production" && process.env.REVERB_AUTH_TEST_BYPASS === "true") {
+    throw new Error("REVERB_AUTH_TEST_BYPASS must not be enabled in production.");
+  }
 }

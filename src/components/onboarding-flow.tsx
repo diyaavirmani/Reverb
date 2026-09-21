@@ -52,7 +52,11 @@ export function OnboardingFlow({ initialProfile }: OnboardingFlowProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(profile)
       });
-      const payload = await response.json() as { profile?: ReverbVenueProfile; error?: string };
+      if (response.status === 401) {
+        router.push("/sign-in");
+        return;
+      }
+      const payload = await readJsonPayload<{ profile?: ReverbVenueProfile; error?: string }>(response);
       if (!response.ok || !payload.profile) throw new Error(payload.error ?? "Reverb could not analyze this venue.");
       router.push("/venue/brief");
       router.refresh();
@@ -98,7 +102,11 @@ export function OnboardingFlow({ initialProfile }: OnboardingFlowProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(fallback)
       });
-      const payload = await response.json() as { error?: string };
+      if (response.status === 401) {
+        router.push("/sign-in");
+        return;
+      }
+      const payload = await readJsonPayload<{ error?: string }>(response);
       if (!response.ok) throw new Error(payload.error ?? "Reverb could not save the venue profile.");
       router.push("/venue/brief");
       router.refresh();
@@ -227,6 +235,13 @@ function StepHeading({ number, title, detail }: { number: string; title: string;
 function updateVenue<K extends keyof ReverbVenueProfile["venue"]>(profile: ReverbVenueProfile, key: K, value: ReverbVenueProfile["venue"][K]): ReverbVenueProfile { return { ...profile, venue: { ...profile.venue, [key]: value } }; }
 function updateDefaults<K extends keyof ReverbVenueProfile["campaignDefaults"]>(profile: ReverbVenueProfile, key: K, value: ReverbVenueProfile["campaignDefaults"][K]): ReverbVenueProfile { return { ...profile, campaignDefaults: { ...profile.campaignDefaults, [key]: value } }; }
 function approvalLabel(mode: (typeof approvalModes)[number]) { if (mode === "DRAFT_ONLY") return "Draft campaigns only"; if (mode === "APPROVED_RECURRING_RULES") return "Allow approved recurring campaign rules"; return "Prepare campaigns, always ask before launch"; }
+async function readJsonPayload<T>(response: Response): Promise<T> {
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    throw new Error("Reverb returned an unexpected response.");
+  }
+
+  return response.json() as Promise<T>;
+}
 function validateStep(step: number, profile: ReverbVenueProfile): string | null {
   if (step === 0 && (!profile.venue.name.trim() || !profile.venue.city.trim() || !profile.venue.address.trim() || profile.venue.capacity < 1)) return "Enter the venue name, city, address, and seating capacity.";
   if (step === 2 && (profile.operations.openingDays.length === 0 || profile.operations.quietSlots.length === 0)) return "Choose at least one opening day and one quiet capacity window.";
