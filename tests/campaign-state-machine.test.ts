@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createAuditEvent } from "../src/lib/core/audit";
 import {
   CAMPAIGN_STATUS_TRANSITIONS,
+  InvalidCampaignTransitionError,
   TERMINAL_CAMPAIGN_STATUSES,
   assertTransition,
   canTransition,
@@ -95,6 +96,7 @@ describe("campaign state machine", () => {
     "rejects backwards transition %s -> %s",
     (from, to) => {
       expect(canTransition(from, to)).toBe(false);
+      expect(() => assertTransition(from, to)).toThrow(InvalidCampaignTransitionError);
       expect(() => assertTransition(from, to)).toThrow(
         `Invalid campaign status transition: ${from} -> ${to}`
       );
@@ -159,6 +161,7 @@ describe("campaign state machine", () => {
   });
 
   it("rejects invalid transitions without producing an update", () => {
+    expect(() => transitionCampaign(baseCampaign, "ACTIVE")).toThrow(InvalidCampaignTransitionError);
     expect(() => transitionCampaign(baseCampaign, "ACTIVE")).toThrow(
       "Invalid campaign status transition: DRAFT -> ACTIVE"
     );

@@ -210,6 +210,11 @@ export class CampaignService {
     });
 
     await this.adapters.n8nStorage.saveRecord(decisions, campaign.id, { ...decision });
+
+    if (campaign.status === "REJECTED_BY_POLICY" && selectedOption === null) {
+      return { campaign, decision, selectedOption };
+    }
+
     campaign = await this.transition(
       campaign,
       selectedOption ? "GENERATING_CREATIVE" : "REJECTED_BY_POLICY",

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { applyDemoCampaignDraft, getPerformanceLabels, type DemoCampaign } from "./demo-data";
 import {
   isCompletedLifecycle,
+  isNoEligibleLifecycle,
   loadDemoCampaignDraft,
   loadDemoSnapshot,
   persistDemoSnapshot,
@@ -268,6 +269,12 @@ async function requestLifecycle(campaign: DemoCampaign, trackingCode = `demo_app
     })
   });
   const payload = (await response.json()) as unknown;
+  if (response.ok && isNoEligibleLifecycle(payload)) {
+    const reasons = [...new Set(payload.options?.flatMap((option) => option.rejectionReasons) ?? [])];
+    throw new Error(
+      `No package fits these constraints.${reasons.length ? ` ${reasons.join(" ")}` : ""}`
+    );
+  }
   if (!response.ok || !isCompletedLifecycle(payload)) {
     const message = payload && typeof payload === "object" && "error" in payload
       ? String((payload as { error: unknown }).error)

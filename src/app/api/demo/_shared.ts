@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createIntegrationAdapters, loadRuntimeConfig, type IntegrationAdapters } from "../../../lib/adapters";
 import { CampaignService, CampaignServiceError } from "../../../lib/core/campaign-service";
+import { InvalidCampaignTransitionError } from "../../../lib/core/campaign-state-machine";
 import { createStorageRepository, type StorageRepository } from "../../../lib/repositories";
 import { getSharedFixtureDataDir } from "../../../lib/repositories/shared-fixture-store";
 import { ReservationSubmissionSchema } from "../../../schemas";
@@ -110,6 +111,18 @@ export function demoErrorResponse(error: unknown) {
     );
   }
 
+  if (error instanceof InvalidCampaignTransitionError) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: "INVALID_CAMPAIGN_TRANSITION",
+        from: error.from,
+        to: error.to
+      },
+      { status: 422 }
+    );
+  }
+
   if (error instanceof z.ZodError) {
     return NextResponse.json(
       {
@@ -123,7 +136,14 @@ export function demoErrorResponse(error: unknown) {
     );
   }
 
-  throw error;
+  console.error("Unexpected demo API error", error);
+  return NextResponse.json(
+    {
+      error: "Unexpected demo API error.",
+      code: "INTERNAL_ERROR"
+    },
+    { status: 500 }
+  );
 }
 
 export async function createDemoContext(input: DemoBaseInput = {}) {
@@ -195,6 +215,14 @@ async function prepareCampaign(context: DemoContext) {
   });
   const discovery = await context.service.discoverOptions(campaign.id);
   const selection = await context.service.selectOption(campaign.id);
+  if (selection.selectedOption === null) {
+    const summary = await context.service.getCampaignSummary(campaign.id);
+    return {
+      ...buildCampaignStage(discovery.options, null, "NOT_STARTED", [], campaign.id, summary.campaign.status),
+      outcome: "NO_ELIGIBLE_PACKAGE",
+      finalStatus: summary.campaign.status
+    };
+  }
   const creative = await context.service.generateCreative(campaign.id);
   const quality = await context.service.runQualityChecks(campaign.id);
   const summary = await context.service.getCampaignSummary(campaign.id);
@@ -349,6 +377,44 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
       ? `${result.selectedOption.packageId} selected with score ${result.selectedOption.score}.`
       : "No package passed policy."
   });
+  if (selection.selectedOption === null) {
+    const rejectedSummary = await context.service.getCampaignSummary(campaign.id);
+    const campaignStage = buildCampaignStage(
+      discovery.options,
+      null,
+      "NOT_STARTED",
+      [],
+      campaign.id,
+      rejectedSummary.campaign.status
+    );
+    const auditEvents = await context.repository.listAuditEvents();
+
+    return {
+      mode: "fixture",
+      runId: `run_${campaign.id}`,
+      campaignId: campaign.id,
+      finalStatus: rejectedSummary.campaign.status,
+      outcome: "NO_ELIGIBLE_PACKAGE",
+      selectedOptionId: null,
+      selectedPackageId: null,
+      eligibleOptionCount: campaignStage.eligibleOptionCount,
+      rejectedOptionCount: campaignStage.rejectedOptionCount,
+      options: campaignStage.options,
+      qualityStatus: "NOT_STARTED",
+      ownerApprovalStatus: "NOT_STARTED",
+      paymentSessionStatus: "NOT_STARTED",
+      transactionStatus: "NOT_STARTED",
+      merchantOrderId: null,
+      activationStatus: "NOT_STARTED",
+      publicActivationUrl: null,
+      reservationId: null,
+      isDemoBooking: true,
+      performance: rejectedSummary.performance,
+      auditEventCount: auditEvents.length,
+      executionTrace: trace,
+      policyChecks: []
+    };
+  }
   const creative = await traced(trace, "creative_preparation", "Campaign creative prepared", {
     inputSummary: `Selected package ${selection.selectedOption?.packageId ?? "none"}`,
     run: () => context.service.generateCreative(campaign.id),

@@ -92,13 +92,20 @@ export type CampaignTransitionResult = {
   auditEvent: AuditEvent;
 };
 
+export class InvalidCampaignTransitionError extends Error {
+  constructor(readonly from: CampaignStatus, readonly to: CampaignStatus) {
+    super(`Invalid campaign status transition: ${from} -> ${to}`);
+    this.name = "InvalidCampaignTransitionError";
+  }
+}
+
 export function canTransition(from: CampaignStatus, to: CampaignStatus): boolean {
   return (CAMPAIGN_STATUS_TRANSITIONS[from] as readonly CampaignStatus[]).includes(to);
 }
 
 export function assertTransition(from: CampaignStatus, to: CampaignStatus): void {
   if (!canTransition(from, to)) {
-    throw new Error(`Invalid campaign status transition: ${from} -> ${to}`);
+    throw new InvalidCampaignTransitionError(from, to);
   }
 }
 
@@ -147,4 +154,3 @@ function toUtcIsoString(value: Date | string): string {
 
   return date.toISOString();
 }
-

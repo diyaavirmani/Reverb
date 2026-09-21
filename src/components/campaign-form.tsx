@@ -6,7 +6,13 @@ import { useEffect, useState } from "react";
 
 import type { DemoCampaign } from "./demo-data";
 import { getDemoTodayDate, isPastDemoDate, isValidDemoDate } from "./demo-date";
-import { isPreparedLifecycle, loadDemoCampaignDraft, persistDemoSnapshot, type DemoCampaignDraft } from "./demo-state";
+import {
+  isNoEligibleLifecycle,
+  isPreparedLifecycle,
+  loadDemoCampaignDraft,
+  persistDemoSnapshot,
+  type DemoCampaignDraft
+} from "./demo-state";
 import { Icon } from "./icons";
 
 type CampaignFormProps = {
@@ -18,6 +24,7 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rejectionReasons, setRejectionReasons] = useState<string[]>([]);
   const [date, setDate] = useState(campaign.date);
   const [campaignContext, setCampaignContext] = useState<NonNullable<DemoCampaignDraft["campaignContext"]>>("REGULAR_DAY");
   const [minimumDate, setMinimumDate] = useState<string | undefined>(undefined);
@@ -38,6 +45,7 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    setRejectionReasons([]);
 
     const values = new FormData(event.currentTarget);
     const draft: DemoCampaignDraft = {
@@ -72,6 +80,13 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
         })
       });
       const payload = (await response.json()) as unknown;
+
+      if (response.ok && isNoEligibleLifecycle(payload)) {
+        setError("No package fits these constraints. Edit the budget, CPA, discount, seats, or timing and try again.");
+        setRejectionReasons([...new Set(payload.options?.flatMap((option) => option.rejectionReasons) ?? [])]);
+        setSubmitting(false);
+        return;
+      }
 
       if (!response.ok || !isPreparedLifecycle(payload)) {
         const message = payload && typeof payload === "object" && "error" in payload
@@ -165,6 +180,11 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
         </button>
       </div>
       {error ? <p className="form-message form-error" role="alert">{error}</p> : null}
+      {rejectionReasons.length ? (
+        <ul className="form-message form-error" aria-label="Package rejection reasons">
+          {rejectionReasons.map((reason) => <li key={reason}>{reason}</li>)}
+        </ul>
+      ) : null}
     </form>
   );
 }
