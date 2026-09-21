@@ -1,13 +1,10 @@
-import { cp, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createIntegrationAdapters, loadRuntimeConfig, type IntegrationAdapters } from "../../../lib/adapters";
 import { CampaignService, CampaignServiceError } from "../../../lib/core/campaign-service";
 import { createStorageRepository, type StorageRepository } from "../../../lib/repositories";
+import { getSharedFixtureDataDir } from "../../../lib/repositories/shared-fixture-store";
 import { ReservationSubmissionSchema } from "../../../schemas";
 
 export const defaultCurrentTime = "2026-08-01T00:00:00.000Z";
@@ -70,7 +67,10 @@ export const demoLifecycleRequestSchema = demoBaseRequestSchema.extend({
 
 type DemoBaseInput = z.infer<typeof demoBaseRequestSchema>;
 type DemoContext = Awaited<ReturnType<typeof createDemoContext>>;
-const demoAdapterCache = new Map<string, IntegrationAdapters>();
+
+declare global {
+  var __reverbDemoAdapters: IntegrationAdapters | undefined;
+}
 
 export async function parseJsonRequest(request: Request) {
   try {
@@ -141,15 +141,14 @@ export async function createDemoContext(input: DemoBaseInput = {}) {
   }
 
   const clock = () => new Date(process.env.REVERB_CURRENT_TIME ?? defaultCurrentTime);
-  const fixtureDataDir = await resolveFixtureDataDir();
+  const fixtureDataDir = await getSharedFixtureDataDir();
   const repository = createStorageRepository({
     env: { USE_FIXTURES: "true" },
     fixtureDataDir
   });
-  const adapterCacheKey = process.env.REVERB_FIXTURE_DATA_DIR ?? fixtureDataDir;
 
   return {
-    service: new CampaignService(repository, getDemoAdapters(adapterCacheKey, config), clock),
+    service: new CampaignService(repository, getDemoAdapters(config), clock),
     repository,
     spotId: await resolveDemoSpotId(repository, input.spotId ?? process.env.DEMO_SPOT_ID),
     requestedByOwnerId: input.requestedByOwnerId ?? input.ownerId ?? "owner_diya_demo",
@@ -176,27 +175,12 @@ async function resolveDemoSpotId(repository: StorageRepository, configuredSpotId
   return demoSpot.id;
 }
 
-async function resolveFixtureDataDir(): Promise<string> {
-  if (process.env.REVERB_FIXTURE_DATA_DIR) {
-    return process.env.REVERB_FIXTURE_DATA_DIR;
+function getDemoAdapters(config: ReturnType<typeof loadRuntimeConfig>): IntegrationAdapters {
+  if (!globalThis.__reverbDemoAdapters) {
+    globalThis.__reverbDemoAdapters = createIntegrationAdapters(config);
   }
 
-  const temporaryRoot = await mkdtemp(join(tmpdir(), "reverb-demo-fixtures-"));
-  const temporaryDataDir = join(temporaryRoot, "data");
-  await cp(join(process.cwd(), "fixtures", "data"), temporaryDataDir, { recursive: true });
-  return temporaryDataDir;
-}
-
-function getDemoAdapters(cacheKey: string, config: ReturnType<typeof loadRuntimeConfig>): IntegrationAdapters {
-  const cached = demoAdapterCache.get(cacheKey);
-
-  if (cached) {
-    return cached;
-  }
-
-  const adapters = createIntegrationAdapters(config);
-  demoAdapterCache.set(cacheKey, adapters);
-  return adapters;
+  return globalThis.__reverbDemoAdapters;
 }
 
 export async function runCampaignStage(input: z.infer<typeof demoCampaignRequestSchema>) {

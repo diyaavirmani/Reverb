@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { createReachExchangeService, reachFailure } from "../_shared";
 
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const quote = await createReachExchangeService().getQuote(packageId);
+    const quote = await (await createReachExchangeService()).getQuote(packageId);
     return NextResponse.json(quote);
   } catch (error) {
     return reachFailure(error);

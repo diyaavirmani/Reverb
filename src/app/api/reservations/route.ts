@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await createReservationService().createReservation(body.value);
+    const result = await (await createReservationService()).createReservation(body.value);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return reservationFailure(error);

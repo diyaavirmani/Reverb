@@ -3,14 +3,15 @@ import { z } from "zod";
 
 import { ReservationError, ReservationService } from "../../../lib/core/reservations";
 import { createStorageRepository } from "../../../lib/repositories";
+import { getSharedFixtureDataDir } from "../../../lib/repositories/shared-fixture-store";
 
-export function createReservationService(): ReservationService {
+export async function createReservationService(): Promise<ReservationService> {
   return new ReservationService(
     createStorageRepository({
       env: {
         USE_FIXTURES: process.env.USE_FIXTURES ?? "true"
       },
-      fixtureDataDir: process.env.REVERB_FIXTURE_DATA_DIR
+      fixtureDataDir: await getSharedFixtureDataDir()
     }),
     () => new Date(process.env.REVERB_CURRENT_TIME ?? Date.now())
   );

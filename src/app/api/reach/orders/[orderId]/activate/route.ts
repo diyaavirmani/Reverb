@@ -21,7 +21,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const { orderId } = await context.params;
-    const result = await createReachExchangeService().activate(orderId, body.value);
+    const result = await (await createReachExchangeService()).activate(orderId, body.value);
     return NextResponse.json(result);
   } catch (error) {
     return reachFailure(error);

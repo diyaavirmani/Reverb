@@ -15,7 +15,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   try {
     const { campaignId } = await context.params;
-    const result = await createReservationService().getCampaignPerformance(campaignId);
+    const result = await (await createReservationService()).getCampaignPerformance(campaignId);
     return NextResponse.json(result);
   } catch (error) {
     return reservationFailure(error);
