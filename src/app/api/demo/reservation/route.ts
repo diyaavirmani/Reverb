@@ -10,7 +10,7 @@ import {
 } from "../_shared";
 
 export async function POST(request: Request) {
-  const access = await requireReverbApiPermission("reservations:read");
+  const access = await requireReverbApiPermission("campaign:review");
   if (access instanceof NextResponse) return access;
 
   const json = await parseJsonRequest(request);
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(await runReservationStage(parsedRequest.data));
+    return NextResponse.json(await runReservationStage(parsedRequest.data, access?.userId));
   } catch (error) {
     return demoErrorResponse(error);
   }

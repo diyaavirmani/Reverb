@@ -25,6 +25,7 @@ import {
   type Spot,
   type Transaction
 } from "../../schemas";
+import { pruneFixtureCampaigns } from "./shared-fixture-store";
 import type {
   AuditEventFilters,
   CampaignPerformance,
@@ -107,6 +108,30 @@ function roundPercent(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+const mutationChains = new Map<string, Promise<void>>();
+
+async function withMutationLock<T>(dataDir: string, operation: () => Promise<T>): Promise<T> {
+  const previous = mutationChains.get(dataDir) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const next = previous.catch(() => undefined).then(() => current);
+
+  mutationChains.set(dataDir, next);
+  await previous.catch(() => undefined);
+
+  try {
+    return await operation();
+  } finally {
+    release();
+
+    if (mutationChains.get(dataDir) === next) {
+      mutationChains.delete(dataDir);
+    }
+  }
+}
+
 export class LocalFixtureRepository implements StorageRepository {
   constructor(private readonly dataDir = join(process.cwd(), "fixtures", "data")) {}
 
@@ -119,13 +144,16 @@ export class LocalFixtureRepository implements StorageRepository {
   }
 
   async createCampaign(campaign: Campaign): Promise<Campaign> {
-    const parsedCampaign = CampaignSchema.parse(campaign);
-    const campaigns = await this.readRecords<Campaign>(fixtureFiles.campaigns);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedCampaign = CampaignSchema.parse(campaign);
+      const campaigns = await this.readRecords<Campaign>(fixtureFiles.campaigns);
 
-    requireNoDuplicateId(campaigns, parsedCampaign.id, "campaign");
+      requireNoDuplicateId(campaigns, parsedCampaign.id, "campaign");
 
-    await this.writeRecords(fixtureFiles.campaigns, [...campaigns, parsedCampaign]);
-    return parsedCampaign;
+      await this.writeRecords(fixtureFiles.campaigns, [...campaigns, parsedCampaign]);
+      await pruneFixtureCampaigns(this.dataDir);
+      return parsedCampaign;
+    });
   }
 
   async getCampaign(id: string): Promise<Campaign | null> {
@@ -133,15 +161,17 @@ export class LocalFixtureRepository implements StorageRepository {
   }
 
   async updateCampaign(campaign: Campaign): Promise<Campaign> {
-    const parsedCampaign = CampaignSchema.parse(campaign);
-    const campaigns = await this.readRecords<Campaign>(fixtureFiles.campaigns);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedCampaign = CampaignSchema.parse(campaign);
+      const campaigns = await this.readRecords<Campaign>(fixtureFiles.campaigns);
 
-    if (!campaigns.some((existingCampaign) => existingCampaign.id === parsedCampaign.id)) {
-      throw new Error(`Campaign not found: ${parsedCampaign.id}`);
-    }
+      if (!campaigns.some((existingCampaign) => existingCampaign.id === parsedCampaign.id)) {
+        throw new Error(`Campaign not found: ${parsedCampaign.id}`);
+      }
 
-    await this.writeRecords(fixtureFiles.campaigns, replaceById(campaigns, parsedCampaign));
-    return parsedCampaign;
+      await this.writeRecords(fixtureFiles.campaigns, replaceById(campaigns, parsedCampaign));
+      return parsedCampaign;
+    });
   }
 
   async listProviders(): Promise<PromotionProvider[]> {
@@ -170,17 +200,19 @@ export class LocalFixtureRepository implements StorageRepository {
     campaignId: string,
     options: CampaignOption[]
   ): Promise<CampaignOption[]> {
-    const parsedOptions = z.array(CampaignOptionSchema).parse(options);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedOptions = z.array(CampaignOptionSchema).parse(options);
 
-    if (parsedOptions.some((option) => option.campaignId !== campaignId)) {
-      throw new Error(`Campaign option campaignId must match campaign: ${campaignId}`);
-    }
+      if (parsedOptions.some((option) => option.campaignId !== campaignId)) {
+        throw new Error(`Campaign option campaignId must match campaign: ${campaignId}`);
+      }
 
-    const existingOptions = await this.readRecords<CampaignOption>(fixtureFiles.campaignOptions);
-    const retainedOptions = existingOptions.filter((option) => option.campaignId !== campaignId);
+      const existingOptions = await this.readRecords<CampaignOption>(fixtureFiles.campaignOptions);
+      const retainedOptions = existingOptions.filter((option) => option.campaignId !== campaignId);
 
-    await this.writeRecords(fixtureFiles.campaignOptions, [...retainedOptions, ...parsedOptions]);
-    return parsedOptions;
+      await this.writeRecords(fixtureFiles.campaignOptions, [...retainedOptions, ...parsedOptions]);
+      return parsedOptions;
+    });
   }
 
   async getCampaignOptions(campaignId: string): Promise<CampaignOption[]> {
@@ -189,11 +221,13 @@ export class LocalFixtureRepository implements StorageRepository {
   }
 
   async saveCampaignAsset(asset: CampaignAsset): Promise<CampaignAsset> {
-    const parsedAsset = CampaignAssetSchema.parse(asset);
-    const assets = await this.readRecords<CampaignAsset>(fixtureFiles.campaignAssets);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedAsset = CampaignAssetSchema.parse(asset);
+      const assets = await this.readRecords<CampaignAsset>(fixtureFiles.campaignAssets);
 
-    await this.writeRecords(fixtureFiles.campaignAssets, replaceById(assets, parsedAsset));
-    return parsedAsset;
+      await this.writeRecords(fixtureFiles.campaignAssets, replaceById(assets, parsedAsset));
+      return parsedAsset;
+    });
   }
 
   async getCampaignAsset(id: string): Promise<CampaignAsset | null> {
@@ -201,11 +235,13 @@ export class LocalFixtureRepository implements StorageRepository {
   }
 
   async saveTransaction(transaction: Transaction): Promise<Transaction> {
-    const parsedTransaction = TransactionSchema.parse(transaction);
-    const transactions = await this.readRecords<Transaction>(fixtureFiles.transactions);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedTransaction = TransactionSchema.parse(transaction);
+      const transactions = await this.readRecords<Transaction>(fixtureFiles.transactions);
 
-    await this.writeRecords(fixtureFiles.transactions, replaceById(transactions, parsedTransaction));
-    return parsedTransaction;
+      await this.writeRecords(fixtureFiles.transactions, replaceById(transactions, parsedTransaction));
+      return parsedTransaction;
+    });
   }
 
   async getTransaction(id: string): Promise<Transaction | null> {
@@ -213,11 +249,13 @@ export class LocalFixtureRepository implements StorageRepository {
   }
 
   async saveMerchantOrder(order: MerchantOrder): Promise<MerchantOrder> {
-    const parsedOrder = MerchantOrderSchema.parse(order);
-    const orders = await this.readRecords<MerchantOrder>(fixtureFiles.merchantOrders);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedOrder = MerchantOrderSchema.parse(order);
+      const orders = await this.readRecords<MerchantOrder>(fixtureFiles.merchantOrders);
 
-    await this.writeRecords(fixtureFiles.merchantOrders, replaceById(orders, parsedOrder));
-    return parsedOrder;
+      await this.writeRecords(fixtureFiles.merchantOrders, replaceById(orders, parsedOrder));
+      return parsedOrder;
+    });
   }
 
   async getMerchantOrder(id: string): Promise<MerchantOrder | null> {
@@ -225,11 +263,13 @@ export class LocalFixtureRepository implements StorageRepository {
   }
 
   async saveReservation(reservation: Reservation): Promise<Reservation> {
-    const parsedReservation = ReservationSchema.parse(reservation);
-    const reservations = await this.readRecords<Reservation>(fixtureFiles.reservations);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedReservation = ReservationSchema.parse(reservation);
+      const reservations = await this.readRecords<Reservation>(fixtureFiles.reservations);
 
-    await this.writeRecords(fixtureFiles.reservations, replaceById(reservations, parsedReservation));
-    return parsedReservation;
+      await this.writeRecords(fixtureFiles.reservations, replaceById(reservations, parsedReservation));
+      return parsedReservation;
+    });
   }
 
   async listReservations(campaignId?: string): Promise<Reservation[]> {
@@ -243,13 +283,15 @@ export class LocalFixtureRepository implements StorageRepository {
   }
 
   async appendAuditEvent(event: AuditEvent): Promise<AuditEvent> {
-    const parsedEvent = AuditEventSchema.parse(event);
-    const auditEvents = await this.readRecords<AuditEvent>(fixtureFiles.auditEvents);
+    return withMutationLock(this.dataDir, async () => {
+      const parsedEvent = AuditEventSchema.parse(event);
+      const auditEvents = await this.readRecords<AuditEvent>(fixtureFiles.auditEvents);
 
-    requireNoDuplicateId(auditEvents, parsedEvent.id, "audit event");
+      requireNoDuplicateId(auditEvents, parsedEvent.id, "audit event");
 
-    await this.writeRecords(fixtureFiles.auditEvents, [...auditEvents, parsedEvent]);
-    return parsedEvent;
+      await this.writeRecords(fixtureFiles.auditEvents, [...auditEvents, parsedEvent]);
+      return parsedEvent;
+    });
   }
 
   async listAuditEvents(filters?: AuditEventFilters): Promise<AuditEvent[]> {
@@ -366,4 +408,3 @@ export class LocalFixtureRepository implements StorageRepository {
     return join(this.dataDir, fileName);
   }
 }
-

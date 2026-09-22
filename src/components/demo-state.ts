@@ -8,6 +8,7 @@ export type DemoLifecycleState = {
   runId?: string;
   campaignId: string;
   finalStatus: string;
+  outcome?: string;
   selectedOptionId: string | null;
   selectedPackageId: string | null;
   eligibleOptionCount: number;
@@ -22,12 +23,16 @@ export type DemoLifecycleState = {
   reservationId: string | null;
   isDemoBooking: boolean;
   performance: {
+    initialUnusedCapacity: number;
+    targetReservations: number;
     confirmedReservationCount: number;
     confirmedGuestCount: number;
     remainingCapacity: number;
     capacityRecoveryPercent: number;
+    promotionSpendPaise: number;
     actualCostPerReservationPaise: number | null;
     estimatedRevenueRecoveredPaise: number;
+    campaignStatus: string;
   };
   auditEventCount: number;
   options?: DemoLifecycleOption[];
@@ -38,6 +43,8 @@ export type DemoLifecycleState = {
 export type DemoLifecycleOption = {
   id: string;
   packageId: string;
+  providerName: string;
+  packageTitle: string;
   score: number;
   totalCostPaise: number;
   expectedReservations: number;
@@ -207,6 +214,19 @@ export function isPreparedLifecycle(value: unknown): value is DemoLifecycleState
     lifecycle.qualityStatus === "PASSED" &&
     Array.isArray(lifecycle.executionTrace) &&
     Array.isArray(lifecycle.policyChecks)
+  );
+}
+
+export function isNoEligibleLifecycle(value: unknown): value is DemoLifecycleState {
+  if (!value || typeof value !== "object") return false;
+  const lifecycle = value as Partial<DemoLifecycleState>;
+  return (
+    typeof lifecycle.campaignId === "string" &&
+    lifecycle.finalStatus === "REJECTED_BY_POLICY" &&
+    lifecycle.outcome === "NO_ELIGIBLE_PACKAGE" &&
+    lifecycle.selectedOptionId === null &&
+    lifecycle.selectedPackageId === null &&
+    Array.isArray(lifecycle.options)
   );
 }
 

@@ -83,6 +83,7 @@ describe("Clerk route wiring", () => {
     const account = source("src/components/authenticated-account.tsx");
 
     expect(proxy).toContain("clerkMiddleware");
+    expect(proxy).toContain("api/health");
     expect(proxy).not.toContain("auth.protect");
     expect(layout).toContain("<ClerkProvider");
     expect(layout).toContain('afterSignOutUrl="/"');

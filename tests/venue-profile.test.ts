@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDemoCampaignScheduleForWeekday } from "../src/components/demo-date";
+import {
+  ClerkMetadataSizeError,
+  clerkMetadataSafeBytes,
+  jsonByteSize,
+  prepareProfileForClerkMetadata
+} from "../src/lib/venue/clerk-profile";
 import { emptyReverbProfile, parseReverbProfile } from "../src/lib/venue/profile";
 import {
   analyzeVenueWebsite,
@@ -9,6 +15,8 @@ import {
   validatePublicWebsiteUrl,
   WebsiteAnalysisError
 } from "../src/lib/venue/website-analysis";
+
+vi.mock("server-only", () => ({}));
 
 function profileWithWebsite() {
   return {
@@ -37,6 +45,41 @@ describe("Reverb venue profile", () => {
     expect(result.facts).toContain("Owner-entered venue: Cedar Room");
     expect(result.lastAnalyzedAt).toBe("2026-08-29T10:00:00.000Z");
   });
+
+  it("trims large analysis metadata before storing a Clerk profile", () => {
+    const profile = {
+      ...profileWithWebsite(),
+      analysis: {
+        ...profileWithWebsite().analysis,
+        sourceStatuses: Array.from({ length: 8 }, (_, index) => ({
+          url: `https://cedar.example/${index}`,
+          status: "analyzed" as const,
+          detail: "x".repeat(240)
+        })),
+        facts: Array.from({ length: 24 }, () => "f".repeat(500)),
+        inferences: Array.from({ length: 16 }, () => "i".repeat(500))
+      }
+    };
+
+    const trimmed = prepareProfileForClerkMetadata(profile);
+
+    expect(jsonByteSize(trimmed)).toBeLessThanOrEqual(clerkMetadataSafeBytes);
+    expect(trimmed.analysis.sourceStatuses).toEqual([]);
+    expect(trimmed.analysis.facts).toEqual([]);
+    expect(trimmed.analysis.inferences).toEqual([]);
+  });
+
+  it("throws a typed error when trimming analysis still exceeds Clerk metadata margin", () => {
+    const profile = {
+      ...profileWithWebsite(),
+      brand: {
+        ...profileWithWebsite().brand,
+        summary: "s".repeat(8 * 1024)
+      }
+    };
+
+    expect(() => prepareProfileForClerkMetadata(profile)).toThrow(ClerkMetadataSizeError);
+  });
 });
 
 describe("safe public venue analysis", () => {
@@ -49,6 +92,24 @@ describe("safe public venue analysis", () => {
 
   it("rejects a DNS result that resolves to a private network", async () => {
     await expect(validatePublicWebsiteUrl("https://venue.example", async () => [{ address: "192.168.1.2", family: 4 }])).rejects.toMatchObject({ code: "PRIVATE_HOST" });
+  });
+
+  it.each([
+    "http://[::1]",
+    "http://[::ffff:7f00:1]",
+    "http://[::ffff:127.0.0.1]",
+    "http://[fe80::1]",
+    "http://[64:ff9b::7f00:1]",
+    "http://[2002:7f00:1::]",
+    "http://[::ffff:a9fe:a9fe]",
+    "http://169.254.169.254",
+    "http://0x7f.1",
+    "http://2130706433",
+    "https://quiet-cup.internal"
+  ])("rejects private host %s with PRIVATE_HOST", async (url) => {
+    await expect(
+      validatePublicWebsiteUrl(url, async () => [{ address: "93.184.216.34", family: 4 }])
+    ).rejects.toMatchObject({ code: "PRIVATE_HOST" });
   });
 
   it("extracts bounded metadata and labels inferred themes separately", () => {

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { GET as getPerformance } from "../src/app/api/campaigns/[campaignId]/performance/route";
+import { GET as getCampaignReservations } from "../src/app/api/campaigns/[campaignId]/reservations/route";
 import { POST as createReservation } from "../src/app/api/reservations/route";
 import { LocalFixtureRepository } from "../src/lib/repositories";
 import {
@@ -148,6 +149,74 @@ describe("reservation tracking API", () => {
     });
   });
 
+  it("rate limits public reservation submissions per IP", async () => {
+    const requestBody = {
+      campaignId: "missing_campaign_for_rate_limit",
+      customerName: "Rate Limited Guest",
+      customerContact: "+919900000010",
+      partySize: 1,
+      reservationTime: "2026-08-07T14:00:00.000Z",
+      trackingCode: "tracking_rate_limit",
+      isDemoBooking: false
+    };
+
+    for (let index = 0; index < 10; index += 1) {
+      const response = await createReservation(
+        jsonRequest("/api/reservations", {
+          ...requestBody,
+          trackingCode: `tracking_rate_limit_${index}`
+        }, "203.0.113.10")
+      );
+      expect(response.status).toBe(404);
+    }
+
+    const limitedResponse = await createReservation(
+      jsonRequest("/api/reservations", {
+        ...requestBody,
+        trackingCode: "tracking_rate_limit_11"
+      }, "203.0.113.10")
+    );
+
+    expect(limitedResponse.status).toBe(429);
+    await expect(limitedResponse.json()).resolves.toMatchObject({ code: "RATE_LIMITED" });
+  });
+
+  it("rejects reservation bodies over the public endpoint size limit", async () => {
+    const response = await createReservation(
+      jsonRequest("/api/reservations", {
+        campaignId: activeCampaign.id,
+        customerName: "Oversized Guest",
+        customerContact: "+919900000011",
+        partySize: 2,
+        reservationTime: "2026-08-07T14:00:00.000Z",
+        trackingCode: "tracking_oversized",
+        isDemoBooking: false,
+        notes: "x".repeat(9 * 1024)
+      }, "203.0.113.11")
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ code: "REQUEST_BODY_TOO_LARGE" });
+  });
+
+  it("strictly rejects unknown reservation fields", async () => {
+    const response = await createReservation(
+      jsonRequest("/api/reservations", {
+        campaignId: activeCampaign.id,
+        customerName: "Strict Guest",
+        customerContact: "+919900000012",
+        partySize: 2,
+        reservationTime: "2026-08-07T14:00:00.000Z",
+        trackingCode: "tracking_unknown_field",
+        isDemoBooking: false,
+        unexpectedField: true
+      }, "203.0.113.12")
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "Invalid request body." });
+  });
+
   it("calculates campaign performance from confirmed reservations, spend, and spot value", async () => {
     await repository.saveReservation(baseReservation({ id: "reservation_real_1", seatCount: 2 }));
     await repository.saveReservation(baseReservation({
@@ -184,6 +253,28 @@ describe("reservation tracking API", () => {
       actualCostPerReservationPaise: 240000,
       estimatedRevenueRecoveredPaise: 625000,
       campaignStatus: "ACTIVE"
+    });
+  });
+
+  it("lists reservations for the requested campaign", async () => {
+    await repository.saveReservation(baseReservation({ id: "reservation_listed_1" }));
+    await repository.saveReservation(baseReservation({
+      id: "reservation_other_campaign",
+      campaignId: inactiveCampaign.id,
+      source: "tracking_other_campaign"
+    }));
+
+    const response = await getCampaignReservations(
+      new Request(`http://localhost/api/campaigns/${activeCampaign.id}/reservations`),
+      { params: Promise.resolve({ campaignId: activeCampaign.id }) }
+    );
+    const body = await response.json() as { reservations: Reservation[] };
+
+    expect(response.status).toBe(200);
+    expect(body.reservations).toHaveLength(1);
+    expect(body.reservations[0]).toMatchObject({
+      id: "reservation_listed_1",
+      campaignId: activeCampaign.id
     });
   });
 });
@@ -225,11 +316,12 @@ function completedTransaction(): Transaction {
   };
 }
 
-function jsonRequest(path: string, body: unknown): Request {
+function jsonRequest(path: string, body: unknown, ip = "203.0.113.1"): Request {
   return new Request(`http://localhost${path}`, {
     method: "POST",
     headers: {
-      "content-type": "application/json"
+      "content-type": "application/json",
+      "x-forwarded-for": ip
     },
     body: JSON.stringify(body)
   });

@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
 import { createReachExchangeService, parseJson, reachFailure } from "../_shared";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await createReachExchangeService().checkout(body.value);
+    const result = await (await createReachExchangeService()).checkout(body.value);
     return NextResponse.json(result);
   } catch (error) {
     return reachFailure(error);

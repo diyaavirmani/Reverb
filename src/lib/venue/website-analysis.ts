@@ -103,7 +103,7 @@ export async function validatePublicWebsiteUrl(
   if (url.port && !["80", "443"].includes(url.port)) {
     throw new WebsiteAnalysisError("PORT_NOT_ALLOWED", "Only standard website ports can be analyzed.");
   }
-  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  const host = normalizeAddressLiteral(url.hostname.toLowerCase().replace(/\.$/, ""));
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
     throw new WebsiteAnalysisError("PRIVATE_HOST", "Private and local network addresses cannot be analyzed.");
   }
@@ -115,14 +115,37 @@ export async function validatePublicWebsiteUrl(
 }
 
 export function isPrivateAddress(address: string): boolean {
-  const normalized = address.toLowerCase();
+  const normalized = normalizeAddressLiteral(address.toLowerCase());
+  const legacyIpv4 = legacyIpv4ToOctets(normalized);
+
+  if (legacyIpv4) {
+    return isPrivateIpv4Octets(legacyIpv4);
+  }
+
   if (normalized === "::" || normalized === "::1") return true;
   if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
   if (/^fe[89ab]/.test(normalized)) return true;
-  if (normalized.startsWith("::ffff:")) return isPrivateAddress(normalized.slice(7));
+  if (normalized.startsWith("::ffff:")) {
+    return isPrivateAddress(normalized.slice(7)) || isPrivateIpv4FromHextets(normalized.slice(7));
+  }
+  if (normalized.startsWith("64:ff9b:")) {
+    return isPrivateIpv4FromHextets(lastIpv6Hextets(normalized, 2).join(":"));
+  }
+  if (normalized.startsWith("2002:")) {
+    return isPrivateIpv4FromHextets(normalized.split(":").slice(1, 3).join(":"));
+  }
 
   if (isIP(normalized) !== 4) return false;
   const [a, b] = normalized.split(".").map(Number);
+  return isPrivateIpv4Octets([a, b, Number(normalized.split(".")[2]), Number(normalized.split(".")[3])]);
+}
+
+function normalizeAddressLiteral(value: string): string {
+  return value.replace(/^\[(.*)\]$/, "$1").split("%")[0] ?? value;
+}
+
+function isPrivateIpv4Octets(octets: number[]): boolean {
+  const [a, b] = octets;
   return (
     a === 0 ||
     a === 10 ||
@@ -134,6 +157,65 @@ export function isPrivateAddress(address: string): boolean {
     (a === 198 && (b === 18 || b === 19)) ||
     a >= 224
   );
+}
+
+function legacyIpv4ToOctets(value: string): number[] | null {
+  if (/^\d+$/.test(value)) {
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 0xffffffff) return null;
+    return [(parsed >>> 24) & 255, (parsed >>> 16) & 255, (parsed >>> 8) & 255, parsed & 255];
+  }
+
+  if (!value.includes(".")) {
+    return null;
+  }
+
+  const parts = value.split(".");
+  if (parts.length > 4) {
+    return null;
+  }
+
+  const numbers = parts.map(parseIpv4Part);
+  if (numbers.some((part) => part === null)) {
+    return null;
+  }
+
+  if (numbers.length === 4 && numbers.every((part) => part !== null && part <= 255)) {
+    return numbers as number[];
+  }
+
+  const first = numbers[0];
+  return typeof first === "number" && first >= 0 && first <= 255 ? [first, 0, 0, 0] : null;
+}
+
+function parseIpv4Part(value: string): number | null {
+  const parsed = value.startsWith("0x") ? Number.parseInt(value.slice(2), 16) : Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function isPrivateIpv4FromHextets(value: string): boolean {
+  const dotted = legacyIpv4ToOctets(value);
+  if (dotted) {
+    return isPrivateIpv4Octets(dotted);
+  }
+
+  const parts = value.split(":").filter(Boolean);
+  if (parts.length < 2) {
+    return false;
+  }
+
+  const high = Number.parseInt(parts.at(-2) ?? "", 16);
+  const low = Number.parseInt(parts.at(-1) ?? "", 16);
+
+  if (!Number.isInteger(high) || !Number.isInteger(low)) {
+    return false;
+  }
+
+  return isPrivateIpv4Octets([(high >> 8) & 255, high & 255, (low >> 8) & 255, low & 255]);
+}
+
+function lastIpv6Hextets(value: string, count: number): string[] {
+  return value.split(":").filter(Boolean).slice(-count);
 }
 
 export function extractVenueMetadata(html: string, sourceUrl: URL) {

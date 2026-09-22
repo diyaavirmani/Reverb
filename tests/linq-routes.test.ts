@@ -13,6 +13,7 @@ import webhookFixture from "../fixtures/linq/webhook-event.json";
 
 const managedEnvironmentKeys = [
   "USE_FIXTURES",
+  "APP_ENV",
   "NODE_ENV",
   "LINQ_WEBHOOK_SECRET",
   "N8N_INTAKE_WEBHOOK_URL",
@@ -26,6 +27,7 @@ const originalEnvironment = Object.fromEntries(
 describe("POST /api/webhooks/linq", () => {
   beforeEach(() => {
     process.env.USE_FIXTURES = "true";
+    delete process.env.APP_ENV;
     vi.stubEnv("NODE_ENV", "test");
     delete process.env.LINQ_WEBHOOK_SECRET;
     delete process.env.N8N_INTAKE_WEBHOOK_URL;
@@ -104,6 +106,8 @@ describe("POST /api/webhooks/linq", () => {
   });
 
   it("rejects an unsigned request in production", async () => {
+    process.env.USE_FIXTURES = "false";
+    vi.stubEnv("APP_ENV", "production");
     vi.stubEnv("NODE_ENV", "production");
 
     const response = await receiveLinqWebhook(

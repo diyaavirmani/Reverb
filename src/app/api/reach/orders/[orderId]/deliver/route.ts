@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { requireReverbApiPermission } from "../../../../../../lib/auth/api-authorization";
 import { createReachExchangeService, parseJson, reachFailure } from "../../../_shared";
@@ -21,7 +21,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const { orderId } = await context.params;
-    const result = await createReachExchangeService().deliver(orderId, body.value);
+    const result = await (await createReachExchangeService()).deliver(orderId, body.value);
     return NextResponse.json(result);
   } catch (error) {
     return reachFailure(error);

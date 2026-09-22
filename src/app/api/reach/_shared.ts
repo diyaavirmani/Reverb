@@ -1,16 +1,17 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ReachExchangeError, ReachExchangeService } from "../../../lib/core/reach-exchange";
 import { createStorageRepository } from "../../../lib/repositories";
+import { getSharedFixtureDataDir } from "../../../lib/repositories/shared-fixture-store";
 
-export function createReachExchangeService(): ReachExchangeService {
+export async function createReachExchangeService(): Promise<ReachExchangeService> {
   return new ReachExchangeService(
     createStorageRepository({
       env: {
         USE_FIXTURES: process.env.USE_FIXTURES ?? "true"
       },
-      fixtureDataDir: process.env.REACH_FIXTURE_DATA_DIR
+      fixtureDataDir: await getSharedFixtureDataDir()
     }),
     () => new Date(process.env.REACH_CURRENT_TIME ?? Date.now())
   );

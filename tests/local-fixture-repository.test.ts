@@ -76,6 +76,22 @@ describe("LocalFixtureRepository", () => {
     await expect(repository.getCampaign(campaign.id)).resolves.toEqual(updatedCampaign);
   });
 
+  it("serializes concurrent campaign writes without losing either record", async () => {
+    const secondCampaign: Campaign = {
+      ...campaign,
+      id: "campaign_test_002",
+      requestSummary: "Fill 8 unused seats on Saturday evening."
+    };
+
+    await Promise.all([
+      repository.createCampaign(campaign),
+      repository.createCampaign(secondCampaign)
+    ]);
+
+    await expect(repository.getCampaign(campaign.id)).resolves.toEqual(campaign);
+    await expect(repository.getCampaign(secondCampaign.id)).resolves.toEqual(secondCampaign);
+  });
+
   it("rejects duplicate campaign IDs", async () => {
     await repository.createCampaign(campaign);
 

@@ -1,18 +1,40 @@
-import { cp, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createIntegrationAdapters, loadRuntimeConfig, type IntegrationAdapters } from "../../../lib/adapters";
 import { CampaignService, CampaignServiceError } from "../../../lib/core/campaign-service";
+import { InvalidCampaignTransitionError } from "../../../lib/core/campaign-state-machine";
 import { createStorageRepository, type StorageRepository } from "../../../lib/repositories";
+import { getSharedFixtureDataDir } from "../../../lib/repositories/shared-fixture-store";
 import { ReservationSubmissionSchema } from "../../../schemas";
 
-export const defaultCurrentTime = "2026-08-01T00:00:00.000Z";
 export const defaultOwnerMessage =
   "Fill Friday 7-9 PM with 12 unused seats, target 6 reservations, budget Rs 5,000, maximum discount 15%, and maximum CPA Rs 850.";
+
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const timeSchema = z.string().regex(/^\d{2}:\d{2}$/);
+
+const structuredCampaignRequestSchema = z
+  .object({
+    date: dateSchema,
+    startTime: timeSchema,
+    endTime: timeSchema,
+    timezone: z.string().min(1).default("Asia/Kolkata"),
+    unusedCapacity: z.number().int().positive(),
+    targetReservations: z.number().int().positive(),
+    maximumBudgetPaise: z.number().int().positive(),
+    maximumDiscountPercent: z.number().min(0).max(100),
+    maximumCpaPaise: z.number().int().positive()
+  })
+  .strict()
+  .refine((campaign) => campaign.endTime > campaign.startTime, {
+    message: "endTime must be after startTime.",
+    path: ["endTime"]
+  })
+  .refine((campaign) => campaign.targetReservations <= campaign.unusedCapacity, {
+    message: "targetReservations must be less than or equal to unusedCapacity.",
+    path: ["targetReservations"]
+  });
 
 export const demoBaseRequestSchema = z
   .object({
@@ -51,7 +73,7 @@ export const demoReservationRequestSchema = z
     customerName: z.string().min(1).default("Demo Guest"),
     customerContact: z.string().min(1).default("demo@example.test"),
     partySize: z.number().int().positive().default(2),
-    reservationTime: z.string().min(1).default("2026-08-07T14:00:00.000Z"),
+    reservationTime: z.string().min(1).optional(),
     trackingCode: z.string().min(1).optional(),
     isDemoBooking: z.boolean().default(true)
   })
@@ -64,13 +86,18 @@ export const demoReportRequestSchema = z
   .strict();
 
 export const demoLifecycleRequestSchema = demoBaseRequestSchema.extend({
+  campaign: structuredCampaignRequestSchema.optional(),
   reservation: ReservationSubmissionSchema.omit({ campaignId: true }).partial().optional(),
   prepareOnly: z.boolean().optional().default(false)
 });
 
 type DemoBaseInput = z.infer<typeof demoBaseRequestSchema>;
 type DemoContext = Awaited<ReturnType<typeof createDemoContext>>;
-const demoAdapterCache = new Map<string, IntegrationAdapters>();
+type StructuredCampaignInput = z.infer<typeof structuredCampaignRequestSchema>;
+
+declare global {
+  var __reverbDemoAdapters: IntegrationAdapters | undefined;
+}
 
 export async function parseJsonRequest(request: Request) {
   try {
@@ -110,6 +137,18 @@ export function demoErrorResponse(error: unknown) {
     );
   }
 
+  if (error instanceof InvalidCampaignTransitionError) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: "INVALID_CAMPAIGN_TRANSITION",
+        from: error.from,
+        to: error.to
+      },
+      { status: 422 }
+    );
+  }
+
   if (error instanceof z.ZodError) {
     return NextResponse.json(
       {
@@ -123,7 +162,14 @@ export function demoErrorResponse(error: unknown) {
     );
   }
 
-  throw error;
+  console.error("Unexpected demo API error", error);
+  return NextResponse.json(
+    {
+      error: "Unexpected demo API error.",
+      code: "INTERNAL_ERROR"
+    },
+    { status: 500 }
+  );
 }
 
 export async function createDemoContext(input: DemoBaseInput = {}) {
@@ -140,16 +186,15 @@ export async function createDemoContext(input: DemoBaseInput = {}) {
     );
   }
 
-  const clock = () => new Date(process.env.REVERB_CURRENT_TIME ?? defaultCurrentTime);
-  const fixtureDataDir = await resolveFixtureDataDir();
+  const clock = () => new Date(process.env.REVERB_CURRENT_TIME ?? Date.now());
+  const fixtureDataDir = await getSharedFixtureDataDir();
   const repository = createStorageRepository({
     env: { USE_FIXTURES: "true" },
     fixtureDataDir
   });
-  const adapterCacheKey = process.env.REVERB_FIXTURE_DATA_DIR ?? fixtureDataDir;
 
   return {
-    service: new CampaignService(repository, getDemoAdapters(adapterCacheKey, config), clock),
+    service: new CampaignService(repository, getDemoAdapters(config), clock),
     repository,
     spotId: await resolveDemoSpotId(repository, input.spotId ?? process.env.DEMO_SPOT_ID),
     requestedByOwnerId: input.requestedByOwnerId ?? input.ownerId ?? "owner_diya_demo",
@@ -176,27 +221,12 @@ async function resolveDemoSpotId(repository: StorageRepository, configuredSpotId
   return demoSpot.id;
 }
 
-async function resolveFixtureDataDir(): Promise<string> {
-  if (process.env.REVERB_FIXTURE_DATA_DIR) {
-    return process.env.REVERB_FIXTURE_DATA_DIR;
+function getDemoAdapters(config: ReturnType<typeof loadRuntimeConfig>): IntegrationAdapters {
+  if (!globalThis.__reverbDemoAdapters) {
+    globalThis.__reverbDemoAdapters = createIntegrationAdapters(config);
   }
 
-  const temporaryRoot = await mkdtemp(join(tmpdir(), "reverb-demo-fixtures-"));
-  const temporaryDataDir = join(temporaryRoot, "data");
-  await cp(join(process.cwd(), "fixtures", "data"), temporaryDataDir, { recursive: true });
-  return temporaryDataDir;
-}
-
-function getDemoAdapters(cacheKey: string, config: ReturnType<typeof loadRuntimeConfig>): IntegrationAdapters {
-  const cached = demoAdapterCache.get(cacheKey);
-
-  if (cached) {
-    return cached;
-  }
-
-  const adapters = createIntegrationAdapters(config);
-  demoAdapterCache.set(cacheKey, adapters);
-  return adapters;
+  return globalThis.__reverbDemoAdapters;
 }
 
 export async function runCampaignStage(input: z.infer<typeof demoCampaignRequestSchema>) {
@@ -211,32 +241,29 @@ async function prepareCampaign(context: DemoContext) {
   });
   const discovery = await context.service.discoverOptions(campaign.id);
   const selection = await context.service.selectOption(campaign.id);
+  if (selection.selectedOption === null) {
+    const summary = await context.service.getCampaignSummary(campaign.id);
+    return {
+      ...(await buildCampaignStage(context.repository, discovery.options, null, "NOT_STARTED", [], campaign.id, summary.campaign.status)),
+      outcome: "NO_ELIGIBLE_PACKAGE",
+      finalStatus: summary.campaign.status
+    };
+  }
   const creative = await context.service.generateCreative(campaign.id);
   const quality = await context.service.runQualityChecks(campaign.id);
   const summary = await context.service.getCampaignSummary(campaign.id);
+  const campaignStage = await buildCampaignStage(
+    context.repository,
+    discovery.options,
+    selection.selectedOption,
+    quality.review.status,
+    creative.assets.map((asset) => asset.id),
+    campaign.id,
+    summary.campaign.status
+  );
 
   return {
-    mode: "fixture",
-    campaignId: campaign.id,
-    status: summary.campaign.status,
-    selectedOptionId: selection.selectedOption?.id ?? null,
-    selectedPackageId: selection.selectedOption?.packageId ?? null,
-    eligibleOptionCount: discovery.options.filter((option) => option.passesDeterministicChecks).length,
-    rejectedOptionCount: discovery.options.filter((option) => !option.passesDeterministicChecks).length,
-    options: discovery.options.map((option) => ({
-      id: option.id,
-      packageId: option.packageId,
-      score: option.score,
-      totalCostPaise: option.totalCostPaise,
-      expectedReservations: option.expectedReservations,
-      expectedCpaPaise: option.expectedCpaPaise,
-      discountBps: option.discountBps,
-      eligible: option.passesDeterministicChecks,
-      deterministicChecks: option.deterministicChecks,
-      rejectionReasons: option.rejectionReasons
-    })),
-    qualityStatus: quality.review.status,
-    assetIds: creative.assets.map((asset) => asset.id)
+    ...campaignStage
   };
 }
 
@@ -247,6 +274,7 @@ export async function runCommerceStage(input: z.infer<typeof demoCommerceRequest
 
   const context = await createDemoContext(input);
   const campaignId = input.campaignId ?? (await prepareCampaign(context)).campaignId;
+  await assertCampaignOwner(context.repository, campaignId, input.requestedByOwnerId);
   const approval = await context.service.recordOwnerApproval({
     campaignId,
     ownerId: context.requestedByOwnerId,
@@ -272,15 +300,25 @@ export async function runCommerceStage(input: z.infer<typeof demoCommerceRequest
   };
 }
 
-export async function runReservationStage(input: z.infer<typeof demoReservationRequestSchema>) {
-  const { service } = await createDemoContext();
+export async function runReservationStage(
+  input: z.infer<typeof demoReservationRequestSchema>,
+  requestedByOwnerId?: string
+) {
+  const { service, repository } = await createDemoContext({ requestedByOwnerId });
+  await assertCampaignOwner(repository, input.campaignId, requestedByOwnerId);
+  const campaign = await repository.getCampaign(input.campaignId);
+
+  if (campaign === null) {
+    throw new CampaignServiceError("CAMPAIGN_NOT_FOUND", "Campaign was not found.", 404);
+  }
+
   const trackingCode = input.trackingCode ?? `demo_tracking_${input.campaignId}`;
   const reservation = await service.recordReservation({
     campaignId: input.campaignId,
     customerName: input.customerName,
     customerContact: input.customerContact,
     partySize: input.partySize,
-    reservationTime: input.reservationTime,
+    reservationTime: input.reservationTime ?? defaultReservationTime(campaign.slotStartAt),
     trackingCode,
     isDemoBooking: input.isDemoBooking
   });
@@ -295,8 +333,12 @@ export async function runReservationStage(input: z.infer<typeof demoReservationR
   };
 }
 
-export async function runReportStage(input: z.infer<typeof demoReportRequestSchema>) {
-  const { service, repository } = await createDemoContext();
+export async function runReportStage(
+  input: z.infer<typeof demoReportRequestSchema>,
+  requestedByOwnerId?: string
+) {
+  const { service, repository } = await createDemoContext({ requestedByOwnerId });
+  await assertCampaignOwner(repository, input.campaignId, requestedByOwnerId);
   const summary = await service.getCampaignSummary(input.campaignId);
   const reservations = await repository.listReservations(input.campaignId);
   const merchantOrder =
@@ -316,16 +358,30 @@ export async function runReportStage(input: z.infer<typeof demoReportRequestSche
   };
 }
 
+async function assertCampaignOwner(
+  repository: StorageRepository,
+  campaignId: string,
+  requestedByOwnerId?: string
+): Promise<void> {
+  if (!requestedByOwnerId) {
+    return;
+  }
+
+  const campaign = await repository.getCampaign(campaignId);
+
+  if (campaign === null || campaign.requestedByOwnerId !== requestedByOwnerId) {
+    throw new CampaignServiceError("CAMPAIGN_NOT_FOUND", "Campaign was not found.", 404);
+  }
+}
+
 export async function runFullLifecycle(input: z.infer<typeof demoLifecycleRequestSchema>) {
   const context = await createDemoContext(input);
   const trace: LifecycleTraceEvent[] = [];
   const campaign = await traced(trace, "campaign_request", "Campaign request created", {
-    inputSummary: context.ownerMessage,
-    run: () => context.service.createCampaignFromIntent({
-      spotId: context.spotId,
-      requestedByOwnerId: context.requestedByOwnerId,
-      ownerMessage: context.ownerMessage
-    }),
+    inputSummary: input.campaign
+      ? `${input.campaign.date} ${input.campaign.startTime}-${input.campaign.endTime}; budget ${input.campaign.maximumBudgetPaise} paise`
+      : context.ownerMessage,
+    run: () => createCampaignForContext(context, input.campaign),
     outputSummary: (result) => `${result.unusedCapacity} unused seats; target ${result.targetReservations} reservations.`
   });
   const discovery = await traced(trace, "provider_discovery", "Provider packages discovered", {
@@ -340,6 +396,45 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
       ? `${result.selectedOption.packageId} selected with score ${result.selectedOption.score}.`
       : "No package passed policy."
   });
+  if (selection.selectedOption === null) {
+    const rejectedSummary = await context.service.getCampaignSummary(campaign.id);
+    const campaignStage = await buildCampaignStage(
+      context.repository,
+      discovery.options,
+      null,
+      "NOT_STARTED",
+      [],
+      campaign.id,
+      rejectedSummary.campaign.status
+    );
+    const auditEvents = await context.repository.listAuditEvents();
+
+    return {
+      mode: "fixture",
+      runId: `run_${campaign.id}`,
+      campaignId: campaign.id,
+      finalStatus: rejectedSummary.campaign.status,
+      outcome: "NO_ELIGIBLE_PACKAGE",
+      selectedOptionId: null,
+      selectedPackageId: null,
+      eligibleOptionCount: campaignStage.eligibleOptionCount,
+      rejectedOptionCount: campaignStage.rejectedOptionCount,
+      options: campaignStage.options,
+      qualityStatus: "NOT_STARTED",
+      ownerApprovalStatus: "NOT_STARTED",
+      paymentSessionStatus: "NOT_STARTED",
+      transactionStatus: "NOT_STARTED",
+      merchantOrderId: null,
+      activationStatus: "NOT_STARTED",
+      publicActivationUrl: null,
+      reservationId: null,
+      isDemoBooking: true,
+      performance: rejectedSummary.performance,
+      auditEventCount: auditEvents.length,
+      executionTrace: trace,
+      policyChecks: []
+    };
+  }
   const creative = await traced(trace, "creative_preparation", "Campaign creative prepared", {
     inputSummary: `Selected package ${selection.selectedOption?.packageId ?? "none"}`,
     run: () => context.service.generateCreative(campaign.id),
@@ -351,7 +446,7 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
     outputSummary: (result) => `Quality status ${result.review.status}; ${result.deterministicIssues.length} deterministic issues.`
   });
   const preparedSummary = await context.service.getCampaignSummary(campaign.id);
-  const campaignStage = buildCampaignStage(discovery.options, selection.selectedOption, quality.review.status, creative.assets.map((asset) => asset.id), campaign.id, preparedSummary.campaign.status);
+  const campaignStage = await buildCampaignStage(context.repository, discovery.options, selection.selectedOption, quality.review.status, creative.assets.map((asset) => asset.id), campaign.id, preparedSummary.campaign.status);
   const policyChecks = buildPolicyChecks(preparedSummary, campaignStage.options);
 
   if (input.prepareOnly) {
@@ -420,7 +515,7 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
       customerName: input.reservation?.customerName ?? "Demo Guest",
       customerContact: input.reservation?.customerContact ?? "demo@example.test",
       partySize: input.reservation?.partySize ?? 2,
-      reservationTime: input.reservation?.reservationTime ?? "2026-08-07T14:00:00.000Z",
+      reservationTime: input.reservation?.reservationTime ?? defaultReservationTime(campaign.slotStartAt),
       trackingCode: input.reservation?.trackingCode ?? `demo_tracking_${campaign.id}`,
       isDemoBooking: input.reservation?.isDemoBooking ?? true
     }),
@@ -459,7 +554,27 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
   };
 }
 
-type LifecycleOption = ReturnType<typeof buildCampaignStage>["options"][number];
+function createCampaignForContext(context: DemoContext, campaign?: StructuredCampaignInput) {
+  if (campaign) {
+    return context.service.createCampaignFromStructuredInput({
+      spotId: context.spotId,
+      requestedByOwnerId: context.requestedByOwnerId,
+      ...campaign
+    });
+  }
+
+  return context.service.createCampaignFromIntent({
+    spotId: context.spotId,
+    requestedByOwnerId: context.requestedByOwnerId,
+    ownerMessage: context.ownerMessage
+  });
+}
+
+function defaultReservationTime(slotStartAt: string): string {
+  return new Date(Date.parse(slotStartAt) + 30 * 60_000).toISOString();
+}
+
+type LifecycleOption = Awaited<ReturnType<typeof buildCampaignStage>>["options"][number];
 type LifecycleTraceEvent = {
   id: string;
   step: string;
@@ -512,7 +627,8 @@ async function traced<T>(
   }
 }
 
-function buildCampaignStage(
+async function buildCampaignStage(
+  repository: StorageRepository,
   options: Awaited<ReturnType<CampaignService["discoverOptions"]>>["options"],
   selectedOption: Awaited<ReturnType<CampaignService["selectOption"]>>["selectedOption"],
   qualityStatus: string,
@@ -520,17 +636,24 @@ function buildCampaignStage(
   campaignId: string,
   status: string
 ) {
-  const mappedOptions = options.map((option) => ({
-    id: option.id,
-    packageId: option.packageId,
-    score: option.score,
-    totalCostPaise: option.totalCostPaise,
-    expectedReservations: option.expectedReservations,
-    expectedCpaPaise: option.expectedCpaPaise,
-    discountBps: option.discountBps,
-    eligible: option.passesDeterministicChecks,
-    deterministicChecks: option.deterministicChecks,
-    rejectionReasons: option.rejectionReasons
+  const mappedOptions = await Promise.all(options.map(async (option) => {
+    const promotionPackage = await repository.getPromotionPackage(option.packageId);
+    const provider = promotionPackage ? await repository.getProvider(promotionPackage.providerId) : null;
+
+    return {
+      id: option.id,
+      packageId: option.packageId,
+      providerName: provider?.name ?? "Unknown provider",
+      packageTitle: promotionPackage?.title ?? option.packageId,
+      score: option.score,
+      totalCostPaise: option.totalCostPaise,
+      expectedReservations: option.expectedReservations,
+      expectedCpaPaise: option.expectedCpaPaise,
+      discountBps: option.discountBps,
+      eligible: option.passesDeterministicChecks,
+      deterministicChecks: option.deterministicChecks,
+      rejectionReasons: option.rejectionReasons
+    };
   }));
   return {
     mode: "fixture",

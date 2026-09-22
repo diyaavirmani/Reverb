@@ -34,7 +34,7 @@ export async function runAllEvals(): Promise<EvalSuiteResult[]> {
 
 if (isMainModule(import.meta.url)) {
   const suites = await runAllEvals();
-  const report = await writeEvalReport(suites);
+  const report = await writeEvalReport(suites, { tracked: args.has("--report") });
   logSuiteSummary("All evals", suites.some((suite) => suite.status === "fail") ? "FAIL" : "PASS", statusLine(suites));
   if (args.has("--bug-discovery")) {
     logSafe(`Bug candidates: ${report.recommendedFixOrder.length === 0 ? "none" : report.recommendedFixOrder.join("; ")}`);

@@ -1,16 +1,22 @@
 import { NextResponse } from "next/server";
 
-import { requireReverbPermission } from "../../../../lib/auth/authorization";
-import { getReverbProfile, saveReverbProfile } from "../../../../lib/venue/clerk-profile";
+import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
+import { ClerkMetadataSizeError, getReverbProfile, saveReverbProfile } from "../../../../lib/venue/clerk-profile";
 import { reverbVenueProfileSchema } from "../../../../lib/venue/profile";
 
 export async function GET() {
-  const { userId } = await requireReverbPermission("dashboard:read");
+  const access = await requireReverbApiPermission("dashboard:read");
+  if (access instanceof NextResponse) return access;
+
+  const userId = access?.userId ?? "test_user";
   return NextResponse.json({ profile: await getReverbProfile(userId) });
 }
 
 export async function PUT(request: Request) {
-  const { userId } = await requireReverbPermission("venue:manage");
+  const access = await requireReverbApiPermission("venue:manage");
+  if (access instanceof NextResponse) return access;
+
+  const userId = access?.userId ?? "test_user";
   let value: unknown;
   try {
     value = await request.json();
@@ -21,5 +27,12 @@ export async function PUT(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Review the highlighted venue details.", issues: parsed.error.issues }, { status: 400 });
   }
-  return NextResponse.json({ profile: await saveReverbProfile(userId, parsed.data) });
+  try {
+    return NextResponse.json({ profile: await saveReverbProfile(userId, parsed.data) });
+  } catch (error) {
+    if (error instanceof ClerkMetadataSizeError) {
+      return NextResponse.json({ error: error.message, code: "PROFILE_METADATA_TOO_LARGE" }, { status: 413 });
+    }
+    throw error;
+  }
 }

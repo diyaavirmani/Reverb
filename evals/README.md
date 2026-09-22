@@ -1,6 +1,6 @@
-# Reverb Fill Evals
+# Reverb Evals
 
-This directory contains the Reverb Fill evaluation harness.
+This directory contains the Reverb evaluation harness.
 
 The harness evaluates three layers:
 
@@ -30,11 +30,13 @@ Workflow webhooks are not called by default. To execute local n8n workflow calls
 EVAL_EXECUTE_WORKFLOWS=true
 ```
 
-When workflow URLs are absent, workflow evals are clearly marked as skipped. Reports are written to:
+When workflow URLs are absent, workflow evals are clearly marked as skipped. Routine eval reports are written to:
 
 ```text
-evals/reports/latest-eval-report.json
-evals/reports/latest-eval-report.md
+.reverb/evals/reports/latest-eval-report.json
+.reverb/evals/reports/latest-eval-report.md
 ```
+
+Use `npm run eval:report` or pass `--report` to intentionally refresh the tracked `evals/reports/*` report files.
 
 Reports are redacted before writing and must not include API keys, bearer tokens, webhook secrets, payment authorization references, card data, CVV, or payment credentials.

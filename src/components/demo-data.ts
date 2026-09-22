@@ -22,13 +22,13 @@ export const demoCampaign = {
   maximumBudgetPaise: 500000,
   maximumDiscountPercent: 15,
   maximumCpaPaise: 85000,
-  selectedSpendPaise: 300000,
-  remainingBudgetPaise: 200000,
+  selectedSpendPaise: 480000,
+  remainingBudgetPaise: 20000,
   offer: "15% off sharing platters",
-  expectedBookings: "4–7",
-  worstCaseCpaPaise: 75000,
-  bestOptionScore: 92,
-  providersChecked: 18,
+  expectedBookings: "6",
+  worstCaseCpaPaise: 80000,
+  bestOptionScore: 84,
+  providersChecked: 3,
   status: "Awaiting Approval",
   campaignContext: "REGULAR_DAY"
 };
@@ -136,14 +136,14 @@ export type DemoProvider = {
 export const providers: DemoProvider[] = [
   {
     id: "package_local_dining_boost",
-    provider: "Delhi Food Guide",
+    provider: "Reach Exchange",
     category: "Food & Dining",
     location: "Delhi",
-    package: "Friday Story Placement",
-    pricePaise: 300000,
-    expectedBookings: "4–7",
-    worstCpaPaise: 75000,
-    score: 92,
+    package: "Local Dining Boost",
+    pricePaise: 480000,
+    expectedBookings: "6",
+    worstCpaPaise: 80000,
+    score: 84,
     decision: "Selected",
     reason: "Best CPA within budget"
   },
@@ -252,7 +252,7 @@ export const testimonials = [
   }
 ];
 
-export const venueChips = ["Café Aura", "Delhi Food Guide", "Campus Eats", "Weekend City", "Local Hangout Club", "Brew & Co."];
+export const venueChips = ["Café Aura", "Reach Exchange", "Campus Eats", "Weekend City", "Local Hangout Club", "Brew & Co."];
 
 export const baseReservations = [
   { id: "A7K2", time: "7:15 PM", partySize: 2, revenuePaise: 215000, cpaPaise: 71000 },

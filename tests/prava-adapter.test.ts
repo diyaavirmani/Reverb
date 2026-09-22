@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createIntegrationAdapters, loadRuntimeConfig } from "../src/lib/adapters";
 import { IntegrationError } from "../src/lib/adapters/errors";

@@ -1,4 +1,4 @@
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,8 @@ import { POST as commercePost } from "../src/app/api/demo/commerce/route";
 import { POST as lifecyclePost } from "../src/app/api/demo/lifecycle/route";
 import { POST as reportPost } from "../src/app/api/demo/report/route";
 import { POST as reservationPost } from "../src/app/api/demo/reservation/route";
+import { GET as performanceGet } from "../src/app/api/campaigns/[campaignId]/performance/route";
+import { POST as reservationTrackingPost } from "../src/app/api/reservations/route";
 
 const fixtureSourceDirectory = join(process.cwd(), "fixtures", "data");
 const originalEnv = { ...process.env };
@@ -125,6 +127,89 @@ describe("demo stage APIs", () => {
     },
     15000
   );
+
+  it(
+    "shares one fixture store across sequential route-handler requests when no override is configured",
+    async () => {
+      delete process.env.REVERB_FIXTURE_DATA_DIR;
+
+      const campaign = await postJson(campaignPost, "/api/demo/campaign", {});
+      expect(campaign.status).toBe(200);
+
+      const commerce = await postJson(commercePost, "/api/demo/commerce", {
+        campaignId: campaign.body.campaignId,
+        ownerApproval: true
+      });
+      expect(commerce.status).toBe(200);
+
+      const reservation = await postJson(reservationPost, "/api/demo/reservation", {
+        campaignId: campaign.body.campaignId,
+        trackingCode: "shared_store_route_reservation"
+      });
+      expect(reservation.status).toBe(200);
+
+      const report = await postJson(reportPost, "/api/demo/report", {
+        campaignId: campaign.body.campaignId
+      });
+      expect(report.status).toBe(200);
+      expect(report.body).toMatchObject({
+        campaignId: campaign.body.campaignId,
+        reservationCount: 1,
+        campaignStatus: "ACTIVE"
+      });
+    },
+    15000
+  );
+
+  it(
+    "uses one temporary fixture directory across repeated lifecycles",
+    async () => {
+      delete process.env.REVERB_FIXTURE_DATA_DIR;
+      const initialTempDirCount = await countTempFixtureDirs();
+
+      for (let index = 0; index < 20; index += 1) {
+        const response = await postJson(lifecyclePost, "/api/demo/lifecycle", {
+          prepareOnly: true
+        });
+        expect(response.status).toBe(200);
+      }
+
+      await expect(countTempFixtureDirs()).resolves.toBeLessThanOrEqual(initialTempDirCount + 1);
+    },
+    30000
+  );
+
+  it(
+    "makes public reservation route writes visible to campaign performance for a demo campaign",
+    async () => {
+      delete process.env.REVERB_FIXTURE_DATA_DIR;
+
+      const lifecycle = await postJson(lifecyclePost, "/api/demo/lifecycle", {});
+      expect(lifecycle.status).toBe(200);
+
+      const trackedReservation = await postJson(reservationTrackingPost, "/api/reservations", {
+        campaignId: lifecycle.body.campaignId,
+        customerName: "Visible Guest",
+        customerContact: "+919900000099",
+        partySize: 2,
+        reservationTime: "2026-08-07T14:30:00.000Z",
+        trackingCode: "shared_store_public_reservation",
+        isDemoBooking: false
+      });
+      expect(trackedReservation.status).toBe(201);
+
+      const performanceResponse = await performanceGet(
+        new Request(`http://localhost/api/campaigns/${lifecycle.body.campaignId}/performance`),
+        { params: Promise.resolve({ campaignId: lifecycle.body.campaignId }) }
+      );
+      const performance = await performanceResponse.json();
+
+      expect(performanceResponse.status).toBe(200);
+      expect(performance.confirmedReservationCount).toBe(1);
+      expect(performance.confirmedGuestCount).toBe(2);
+    },
+    15000
+  );
 });
 
 async function postJson(handler: (request: Request) => Promise<Response>, path: string, body: unknown) {
@@ -139,4 +224,9 @@ async function postJson(handler: (request: Request) => Promise<Response>, path: 
     status: response.status,
     body: await response.json()
   };
+}
+
+async function countTempFixtureDirs(): Promise<number> {
+  const entries = await readdir(tmpdir(), { withFileTypes: true });
+  return entries.filter((entry) => entry.isDirectory() && entry.name.startsWith("reverb-demo-fixtures-")).length;
 }

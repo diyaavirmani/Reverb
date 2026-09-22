@@ -1,5 +1,5 @@
 {
-    "name": "reverb-fill",
+    "name": "reverb",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -9,6 +9,7 @@
         "build": "next build",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit",
+        "hygiene:bom": "tsx scripts/check-bom.ts",
         "test": "vitest run",
         "test:watch": "vitest",
         "validate:fixtures": "tsx scripts/validate-fixtures.ts && tsx scripts/validate-sheet-templates.ts",
@@ -27,10 +28,10 @@
     "dependencies": {
         "@clerk/nextjs": "^7.8.3",
         "cheerio": "^1.2.0",
-        "csv-parse": "^7.0.1",
+        "csv-parse": "^7.0.2",
         "csv-stringify": "^6.8.1",
         "date-fns": "^4.4.0",
-        "next": "^16.2.12",
+        "next": "^16.3.5",
         "openai": "^7.3.0",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
@@ -42,7 +43,7 @@
         "@types/react": "^19.2.18",
         "@types/react-dom": "^19.2.4",
         "eslint": "^9.39.5",
-        "eslint-config-next": "^16.2.12",
+        "eslint-config-next": "^16.3.5",
         "tsx": "^4.23.1",
         "typescript": "^6.0.3",
         "vitest": "^4.1.10"

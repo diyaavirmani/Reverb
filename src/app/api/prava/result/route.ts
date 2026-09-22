@@ -1,12 +1,16 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
 import { IntegrationError, createPravaAdapter } from "../../../../lib/adapters";
 import { PravaGetPaymentResultRequestSchema } from "../../../../schemas";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  const access = await requireReverbApiPermission("campaign:approve");
+  if (access instanceof NextResponse) return access;
+
   const parsed = PravaGetPaymentResultRequestSchema.safeParse(
     Object.fromEntries(new URL(request.url).searchParams.entries())
   );

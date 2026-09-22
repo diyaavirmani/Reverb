@@ -9,6 +9,10 @@ import {
 } from "../security/idempotency";
 import { transitionCampaign } from "./campaign-state-machine";
 import {
+  anchorFixturePackagesToCampaignSlot,
+  anchorFixtureVerificationToCampaignSlot
+} from "./fixture-anchoring";
+import {
   evaluatePromotionPackage,
   type PromotionPolicyCampaign,
   type PromotionPolicyEvidence,
@@ -17,6 +21,7 @@ import {
 import { scorePromotionPackage, selectBestPackage, type ProviderScoredPackage } from "./provider-scoring";
 import { ReachExchangeError, ReachExchangeService } from "./reach-exchange";
 import { ReservationService } from "./reservations";
+import { zonedTimeToUtc } from "./zoned-time";
 import {
   AuditEventSchema,
   CampaignAssetSchema,
@@ -59,6 +64,20 @@ export class CampaignServiceError extends Error {
 export type CampaignServiceOptions = {
   paymentAttemptGuard?: PaymentAttemptGuard;
   checkoutProvider?: Pick<ReachExchangeService, "checkout">;
+};
+
+export type StructuredCampaignInput = {
+  spotId: string;
+  requestedByOwnerId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  timezone: string;
+  unusedCapacity: number;
+  targetReservations: number;
+  maximumBudgetPaise: number;
+  maximumDiscountPercent: number;
+  maximumCpaPaise: number;
 };
 
 export class CampaignService {
@@ -118,6 +137,55 @@ export class CampaignService {
     );
   }
 
+  async createCampaignFromStructuredInput(input: StructuredCampaignInput) {
+    const spot = await this.requireSpot(input.spotId);
+    const slotStartAt = zonedTimeToUtc(input.date, input.startTime, input.timezone);
+    const slotEndAt = zonedTimeToUtc(input.date, input.endTime, input.timezone);
+
+    if (Date.parse(slotEndAt) <= Date.parse(slotStartAt)) {
+      throw new CampaignServiceError(
+        "INVALID_CAMPAIGN_SLOT",
+        "Campaign end time must be after start time.",
+        422
+      );
+    }
+
+    if (Date.parse(slotStartAt) <= this.clock().getTime()) {
+      throw new CampaignServiceError(
+        "CAMPAIGN_SLOT_IN_PAST",
+        "Campaign slot must be in the future.",
+        422
+      );
+    }
+
+    const now = this.now();
+    const campaign = CampaignSchema.parse({
+      id: `campaign_${randomUUID()}`,
+      spotId: spot.id,
+      requestedByOwnerId: input.requestedByOwnerId,
+      status: "DRAFT",
+      requestSummary: `Fill ${input.date} ${input.startTime}-${input.endTime} ${input.timezone} with ${input.unusedCapacity} unused seats, target ${input.targetReservations} reservations.`,
+      slotStartAt,
+      slotEndAt,
+      unusedCapacity: input.unusedCapacity,
+      targetReservations: input.targetReservations,
+      maxBudgetPaise: input.maximumBudgetPaise,
+      maxDiscountBps: input.maximumDiscountPercent * 100,
+      maxExpectedCpaPaise: input.maximumCpaPaise,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await this.repository.createCampaign(campaign);
+    return this.transition(
+      campaign,
+      "READY_FOR_DISCOVERY",
+      "CAMPAIGN_CREATED_FROM_STRUCTURED_INPUT",
+      "Campaign created from structured owner input.",
+      { source: "structured_input" }
+    );
+  }
+
   async discoverOptions(campaignId: string) {
     let campaign = await this.requireCampaign(campaignId);
     const spot = await this.requireSpot(campaign.spotId);
@@ -128,7 +196,12 @@ export class CampaignService {
       "Started Senso provider verification."
     );
     const providers = await this.repository.listProviders();
-    const packages = await this.repository.listPromotionPackages();
+    const packages = this.adapters.senso.mode === "fixture"
+      ? anchorFixturePackagesToCampaignSlot(
+          await this.repository.listPromotionPackages(),
+          campaign.slotStartAt
+        )
+      : await this.repository.listPromotionPackages();
     const providerById = new Map(providers.map((provider) => [provider.id, provider]));
     const options: CampaignOption[] = [];
 
@@ -136,11 +209,14 @@ export class CampaignService {
       const provider = providerById.get(promotionPackage.providerId);
       if (!provider) continue;
 
-      const verification = await this.adapters.senso.verifyProvider(
+      const rawVerification = await this.adapters.senso.verifyProvider(
         provider,
         promotionPackage,
         this.sensoContext(campaign, spot)
       );
+      const verification = this.adapters.senso.mode === "fixture"
+        ? anchorFixtureVerificationToCampaignSlot(rawVerification, campaign.slotStartAt)
+        : rawVerification;
       const policyCampaign = this.policyCampaign(campaign, spot);
       const policyPackage = this.policyPackage(promotionPackage, provider, verification);
       const policyEvidence = this.policyEvidence(provider, promotionPackage, verification, spot);
@@ -210,6 +286,11 @@ export class CampaignService {
     });
 
     await this.adapters.n8nStorage.saveRecord(decisions, campaign.id, { ...decision });
+
+    if (campaign.status === "REJECTED_BY_POLICY" && selectedOption === null) {
+      return { campaign, decision, selectedOption };
+    }
+
     campaign = await this.transition(
       campaign,
       selectedOption ? "GENERATING_CREATIVE" : "REJECTED_BY_POLICY",

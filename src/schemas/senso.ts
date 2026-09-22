@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 import { PaiseSchema, UtcDateTimeStringSchema, VerificationStatusSchema } from "./domain";
 

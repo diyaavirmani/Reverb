@@ -1,4 +1,4 @@
-﻿export { IntegrationError } from "./errors";
+export { IntegrationError } from "./errors";
 export {
   createIntegrationAdapters,
   createLinqAdapter,

@@ -1,4 +1,4 @@
-﻿import { LocalFixtureRepository } from "./local-fixture-repository";
+import { LocalFixtureRepository } from "./local-fixture-repository";
 import type { StorageRepository } from "./storage-repository";
 
 type RepositoryFactoryOptions = {

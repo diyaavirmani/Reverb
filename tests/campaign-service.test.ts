@@ -180,6 +180,30 @@ describe("CampaignService", () => {
       ])
     );
   }, 15_000);
+
+  it("returns NO_VALID_OPTIONS when discovery already rejected every package", async () => {
+    const created = await service.createCampaignFromIntent({
+      spotId: "spot_quiet_cup_cafe",
+      requestedByOwnerId: "owner_low_budget",
+      ownerMessage: "Fill Friday 7-9 PM with 12 unused seats, target 6 reservations, budget Rs 100."
+    });
+    await repository.updateCampaign({
+      ...created,
+      maxBudgetPaise: 100,
+      maxExpectedCpaPaise: 100
+    });
+
+    const discovery = await service.discoverOptions(created.id);
+    expect(discovery.campaign.status).toBe("REJECTED_BY_POLICY");
+    expect(discovery.options.every((option) => !option.passesDeterministicChecks)).toBe(true);
+
+    const selection = await service.selectOption(created.id);
+
+    expect(selection.campaign.status).toBe("REJECTED_BY_POLICY");
+    expect(selection.decision.status).toBe("NO_VALID_OPTIONS");
+    expect(selection.selectedOption).toBeNull();
+  });
+
   it.each(deterministicQualityCases)("$name", async ({ expectedIssue, mutate }) => {
     const campaignId = await prepareGeneratedCampaign();
     const storedCreative = await n8nStorage.getRecord("campaign-creatives", campaignId);

@@ -28,6 +28,12 @@ services:
         value: production
       - key: APP_URL
         sync: false
+      - key: REVERB_FIXTURE_DATA_DIR
+        sync: false
+      - key: REACH_FIXTURE_DATA_DIR
+        sync: false
+      - key: REVERB_CURRENT_TIME
+        sync: false
       - key: DEMO_SPOT_ID
         value: spot_quiet_cup_cafe
       - key: DEMO_TIMEZONE
