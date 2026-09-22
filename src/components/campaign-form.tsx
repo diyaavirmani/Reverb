@@ -76,7 +76,17 @@ export function CampaignForm({ campaign, initialCaption }: CampaignFormProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           prepareOnly: true,
-          ownerMessage: `Fill ${draft.date} from ${draft.startTime} to ${draft.endTime} with ${draft.unusedCapacity} unused seats, target ${draft.targetReservations} reservations, budget Rs ${draft.maximumBudgetPaise / 100}, maximum discount ${draft.maximumDiscountPercent}%, and maximum CPA Rs ${draft.maximumCpaPaise / 100}.`,
+          campaign: {
+            date: draft.date,
+            startTime: draft.startTime,
+            endTime: draft.endTime,
+            timezone: "Asia/Kolkata",
+            unusedCapacity: draft.unusedCapacity,
+            targetReservations: draft.targetReservations,
+            maximumBudgetPaise: draft.maximumBudgetPaise,
+            maximumDiscountPercent: draft.maximumDiscountPercent,
+            maximumCpaPaise: draft.maximumCpaPaise
+          }
         })
       });
       const payload = (await response.json()) as unknown;

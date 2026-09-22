@@ -8,9 +8,33 @@ import { createStorageRepository, type StorageRepository } from "../../../lib/re
 import { getSharedFixtureDataDir } from "../../../lib/repositories/shared-fixture-store";
 import { ReservationSubmissionSchema } from "../../../schemas";
 
-export const defaultCurrentTime = "2026-08-01T00:00:00.000Z";
 export const defaultOwnerMessage =
   "Fill Friday 7-9 PM with 12 unused seats, target 6 reservations, budget Rs 5,000, maximum discount 15%, and maximum CPA Rs 850.";
+
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const timeSchema = z.string().regex(/^\d{2}:\d{2}$/);
+
+const structuredCampaignRequestSchema = z
+  .object({
+    date: dateSchema,
+    startTime: timeSchema,
+    endTime: timeSchema,
+    timezone: z.string().min(1).default("Asia/Kolkata"),
+    unusedCapacity: z.number().int().positive(),
+    targetReservations: z.number().int().positive(),
+    maximumBudgetPaise: z.number().int().positive(),
+    maximumDiscountPercent: z.number().min(0).max(100),
+    maximumCpaPaise: z.number().int().positive()
+  })
+  .strict()
+  .refine((campaign) => campaign.endTime > campaign.startTime, {
+    message: "endTime must be after startTime.",
+    path: ["endTime"]
+  })
+  .refine((campaign) => campaign.targetReservations <= campaign.unusedCapacity, {
+    message: "targetReservations must be less than or equal to unusedCapacity.",
+    path: ["targetReservations"]
+  });
 
 export const demoBaseRequestSchema = z
   .object({
@@ -49,7 +73,7 @@ export const demoReservationRequestSchema = z
     customerName: z.string().min(1).default("Demo Guest"),
     customerContact: z.string().min(1).default("demo@example.test"),
     partySize: z.number().int().positive().default(2),
-    reservationTime: z.string().min(1).default("2026-08-07T14:00:00.000Z"),
+    reservationTime: z.string().min(1).optional(),
     trackingCode: z.string().min(1).optional(),
     isDemoBooking: z.boolean().default(true)
   })
@@ -62,12 +86,14 @@ export const demoReportRequestSchema = z
   .strict();
 
 export const demoLifecycleRequestSchema = demoBaseRequestSchema.extend({
+  campaign: structuredCampaignRequestSchema.optional(),
   reservation: ReservationSubmissionSchema.omit({ campaignId: true }).partial().optional(),
   prepareOnly: z.boolean().optional().default(false)
 });
 
 type DemoBaseInput = z.infer<typeof demoBaseRequestSchema>;
 type DemoContext = Awaited<ReturnType<typeof createDemoContext>>;
+type StructuredCampaignInput = z.infer<typeof structuredCampaignRequestSchema>;
 
 declare global {
   var __reverbDemoAdapters: IntegrationAdapters | undefined;
@@ -160,7 +186,7 @@ export async function createDemoContext(input: DemoBaseInput = {}) {
     );
   }
 
-  const clock = () => new Date(process.env.REVERB_CURRENT_TIME ?? defaultCurrentTime);
+  const clock = () => new Date(process.env.REVERB_CURRENT_TIME ?? Date.now());
   const fixtureDataDir = await getSharedFixtureDataDir();
   const repository = createStorageRepository({
     env: { USE_FIXTURES: "true" },
@@ -291,13 +317,19 @@ export async function runReservationStage(
 ) {
   const { service, repository } = await createDemoContext({ requestedByOwnerId });
   await assertCampaignOwner(repository, input.campaignId, requestedByOwnerId);
+  const campaign = await repository.getCampaign(input.campaignId);
+
+  if (campaign === null) {
+    throw new CampaignServiceError("CAMPAIGN_NOT_FOUND", "Campaign was not found.", 404);
+  }
+
   const trackingCode = input.trackingCode ?? `demo_tracking_${input.campaignId}`;
   const reservation = await service.recordReservation({
     campaignId: input.campaignId,
     customerName: input.customerName,
     customerContact: input.customerContact,
     partySize: input.partySize,
-    reservationTime: input.reservationTime,
+    reservationTime: input.reservationTime ?? defaultReservationTime(campaign.slotStartAt),
     trackingCode,
     isDemoBooking: input.isDemoBooking
   });
@@ -357,12 +389,10 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
   const context = await createDemoContext(input);
   const trace: LifecycleTraceEvent[] = [];
   const campaign = await traced(trace, "campaign_request", "Campaign request created", {
-    inputSummary: context.ownerMessage,
-    run: () => context.service.createCampaignFromIntent({
-      spotId: context.spotId,
-      requestedByOwnerId: context.requestedByOwnerId,
-      ownerMessage: context.ownerMessage
-    }),
+    inputSummary: input.campaign
+      ? `${input.campaign.date} ${input.campaign.startTime}-${input.campaign.endTime}; budget ${input.campaign.maximumBudgetPaise} paise`
+      : context.ownerMessage,
+    run: () => createCampaignForContext(context, input.campaign),
     outputSummary: (result) => `${result.unusedCapacity} unused seats; target ${result.targetReservations} reservations.`
   });
   const discovery = await traced(trace, "provider_discovery", "Provider packages discovered", {
@@ -495,7 +525,7 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
       customerName: input.reservation?.customerName ?? "Demo Guest",
       customerContact: input.reservation?.customerContact ?? "demo@example.test",
       partySize: input.reservation?.partySize ?? 2,
-      reservationTime: input.reservation?.reservationTime ?? "2026-08-07T14:00:00.000Z",
+      reservationTime: input.reservation?.reservationTime ?? defaultReservationTime(campaign.slotStartAt),
       trackingCode: input.reservation?.trackingCode ?? `demo_tracking_${campaign.id}`,
       isDemoBooking: input.reservation?.isDemoBooking ?? true
     }),
@@ -532,6 +562,26 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
     executionTrace: trace,
     policyChecks: buildPolicyChecks(summary, campaignStage.options)
   };
+}
+
+function createCampaignForContext(context: DemoContext, campaign?: StructuredCampaignInput) {
+  if (campaign) {
+    return context.service.createCampaignFromStructuredInput({
+      spotId: context.spotId,
+      requestedByOwnerId: context.requestedByOwnerId,
+      ...campaign
+    });
+  }
+
+  return context.service.createCampaignFromIntent({
+    spotId: context.spotId,
+    requestedByOwnerId: context.requestedByOwnerId,
+    ownerMessage: context.ownerMessage
+  });
+}
+
+function defaultReservationTime(slotStartAt: string): string {
+  return new Date(Date.parse(slotStartAt) + 30 * 60_000).toISOString();
 }
 
 type LifecycleOption = ReturnType<typeof buildCampaignStage>["options"][number];

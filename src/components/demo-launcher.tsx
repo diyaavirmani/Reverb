@@ -258,7 +258,17 @@ async function requestLifecycle(campaign: DemoCampaign, trackingCode = `demo_app
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      ownerMessage: `Fill ${campaign.date} from ${campaign.startTime} to ${campaign.endTime} with ${campaign.unusedCapacity} unused seats, target ${campaign.targetReservations} reservations, budget Rs ${campaign.maximumBudgetPaise / 100}, maximum discount ${campaign.maximumDiscountPercent}%, and maximum CPA Rs ${campaign.maximumCpaPaise / 100}.`,
+      campaign: {
+        date: campaign.date,
+        startTime: campaign.startTime,
+        endTime: campaign.endTime,
+        timezone: "Asia/Kolkata",
+        unusedCapacity: campaign.unusedCapacity,
+        targetReservations: campaign.targetReservations,
+        maximumBudgetPaise: campaign.maximumBudgetPaise,
+        maximumDiscountPercent: campaign.maximumDiscountPercent,
+        maximumCpaPaise: campaign.maximumCpaPaise
+      },
       reservation: {
         customerName: "Demo Guest",
         customerContact: "demo@example.test",

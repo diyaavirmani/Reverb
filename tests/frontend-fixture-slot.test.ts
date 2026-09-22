@@ -10,6 +10,10 @@ describe("frontend fixture lifecycle requests", () => {
 
     expect(form).not.toContain("reservationTime:");
     expect(lifecycleActions).not.toContain("reservationTime:");
+    expect(form).toContain("campaign: {");
+    expect(lifecycleActions).toContain("campaign: {");
+    expect(form).not.toContain("ownerMessage: `Fill");
+    expect(lifecycleActions).not.toContain("ownerMessage: `Fill");
     expect(form).toContain('fetch("/api/demo/lifecycle"');
     expect(lifecycleActions).toContain('fetch("/api/demo/lifecycle"');
   });
