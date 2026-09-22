@@ -23,12 +23,16 @@ export type DemoLifecycleState = {
   reservationId: string | null;
   isDemoBooking: boolean;
   performance: {
+    initialUnusedCapacity: number;
+    targetReservations: number;
     confirmedReservationCount: number;
     confirmedGuestCount: number;
     remainingCapacity: number;
     capacityRecoveryPercent: number;
+    promotionSpendPaise: number;
     actualCostPerReservationPaise: number | null;
     estimatedRevenueRecoveredPaise: number;
+    campaignStatus: string;
   };
   auditEventCount: number;
   options?: DemoLifecycleOption[];
@@ -39,6 +43,8 @@ export type DemoLifecycleState = {
 export type DemoLifecycleOption = {
   id: string;
   packageId: string;
+  providerName: string;
+  packageTitle: string;
   score: number;
   totalCostPaise: number;
   expectedReservations: number;

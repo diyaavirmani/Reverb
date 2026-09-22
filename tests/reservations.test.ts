@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { GET as getPerformance } from "../src/app/api/campaigns/[campaignId]/performance/route";
+import { GET as getCampaignReservations } from "../src/app/api/campaigns/[campaignId]/reservations/route";
 import { POST as createReservation } from "../src/app/api/reservations/route";
 import { LocalFixtureRepository } from "../src/lib/repositories";
 import {
@@ -252,6 +253,28 @@ describe("reservation tracking API", () => {
       actualCostPerReservationPaise: 240000,
       estimatedRevenueRecoveredPaise: 625000,
       campaignStatus: "ACTIVE"
+    });
+  });
+
+  it("lists reservations for the requested campaign", async () => {
+    await repository.saveReservation(baseReservation({ id: "reservation_listed_1" }));
+    await repository.saveReservation(baseReservation({
+      id: "reservation_other_campaign",
+      campaignId: inactiveCampaign.id,
+      source: "tracking_other_campaign"
+    }));
+
+    const response = await getCampaignReservations(
+      new Request(`http://localhost/api/campaigns/${activeCampaign.id}/reservations`),
+      { params: Promise.resolve({ campaignId: activeCampaign.id }) }
+    );
+    const body = await response.json() as { reservations: Reservation[] };
+
+    expect(response.status).toBe(200);
+    expect(body.reservations).toHaveLength(1);
+    expect(body.reservations[0]).toMatchObject({
+      id: "reservation_listed_1",
+      campaignId: activeCampaign.id
     });
   });
 });

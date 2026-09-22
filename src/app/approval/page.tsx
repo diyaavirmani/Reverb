@@ -21,12 +21,12 @@ export default async function ApprovalPage() {
           <div className="approval-summary-column">
             <section className="approval-summary-card card">
               <div className="approval-section-title"><span><Icon name="store" /></span><h2>Provider & Package</h2></div>
-              <div className="approval-provider"><span className="approval-provider-photo" /><div><strong>Delhi Food Guide</strong><Badge tone="success"><Icon name="shield" /> Verified Provider</Badge><b>Friday Story Placement</b><small>Selected package</small></div></div>
+              <div className="approval-provider"><span className="approval-provider-photo" /><div><strong>Selected provider</strong><Badge tone="success"><Icon name="shield" /> Verified Provider</Badge><b>Selected package</b><small>Loaded from campaign preparation</small></div></div>
             </section>
             <section className="approval-summary-card card">
               <div className="approval-section-title"><span><Icon name="review" /></span><h2>Package Summary</h2></div>
               <dl className="package-summary">
-                <div><dt>Placement</dt><dd>Friday Story Placement</dd></div>
+                <div><dt>Placement</dt><dd>Selected package</dd></div>
                 <div><dt>Campaign Date</dt><dd><CampaignDateText date={demoCampaign.date} /></dd></div>
                 <div><dt>Amount</dt><dd>{formatMoney(demoCampaign.selectedSpendPaise)}</dd></div>
                 <div><dt>Budget Limit</dt><dd>{formatMoney(demoCampaign.maximumBudgetPaise)}</dd></div>

@@ -103,6 +103,25 @@ describe("approved frontend journey", () => {
     const snapshot = validSnapshot();
     expect(parseDemoSnapshot(JSON.stringify(snapshot))).toEqual(snapshot);
   });
+
+  it("does not render removed hardcoded provider or performance literals", () => {
+    const activeSource = activeUiFiles.map(source).join("\n");
+
+    expect(activeSource).not.toContain("Friday Story Placement");
+    expect(activeSource).not.toContain("RF-DEMO-042");
+    expect(activeSource).not.toContain("4260000");
+    expect(activeSource).not.toContain("12,450");
+  });
+
+  it("stores provider and package display fields from lifecycle options", () => {
+    const stateSource = source("src/components/demo-state.ts");
+    const demoSharedSource = source("src/app/api/demo/_shared.ts");
+
+    expect(stateSource).toContain("providerName: string");
+    expect(stateSource).toContain("packageTitle: string");
+    expect(demoSharedSource).toContain("providerName");
+    expect(demoSharedSource).toContain("packageTitle");
+  });
 });
 
 function source(path: string) {
@@ -141,12 +160,16 @@ function validSnapshot(): DemoSnapshot {
       reservationId: "reservation_demo",
       isDemoBooking: true,
       performance: {
+        initialUnusedCapacity: 12,
+        targetReservations: 6,
         confirmedReservationCount: 0,
         confirmedGuestCount: 0,
         remainingCapacity: 12,
         capacityRecoveryPercent: 0,
+        promotionSpendPaise: 480000,
         actualCostPerReservationPaise: null,
-        estimatedRevenueRecoveredPaise: 0
+        estimatedRevenueRecoveredPaise: 0,
+        campaignStatus: "ACTIVE"
       },
       auditEventCount: 21
     },

@@ -244,7 +244,7 @@ async function prepareCampaign(context: DemoContext) {
   if (selection.selectedOption === null) {
     const summary = await context.service.getCampaignSummary(campaign.id);
     return {
-      ...buildCampaignStage(discovery.options, null, "NOT_STARTED", [], campaign.id, summary.campaign.status),
+      ...(await buildCampaignStage(context.repository, discovery.options, null, "NOT_STARTED", [], campaign.id, summary.campaign.status)),
       outcome: "NO_ELIGIBLE_PACKAGE",
       finalStatus: summary.campaign.status
     };
@@ -252,29 +252,18 @@ async function prepareCampaign(context: DemoContext) {
   const creative = await context.service.generateCreative(campaign.id);
   const quality = await context.service.runQualityChecks(campaign.id);
   const summary = await context.service.getCampaignSummary(campaign.id);
+  const campaignStage = await buildCampaignStage(
+    context.repository,
+    discovery.options,
+    selection.selectedOption,
+    quality.review.status,
+    creative.assets.map((asset) => asset.id),
+    campaign.id,
+    summary.campaign.status
+  );
 
   return {
-    mode: "fixture",
-    campaignId: campaign.id,
-    status: summary.campaign.status,
-    selectedOptionId: selection.selectedOption?.id ?? null,
-    selectedPackageId: selection.selectedOption?.packageId ?? null,
-    eligibleOptionCount: discovery.options.filter((option) => option.passesDeterministicChecks).length,
-    rejectedOptionCount: discovery.options.filter((option) => !option.passesDeterministicChecks).length,
-    options: discovery.options.map((option) => ({
-      id: option.id,
-      packageId: option.packageId,
-      score: option.score,
-      totalCostPaise: option.totalCostPaise,
-      expectedReservations: option.expectedReservations,
-      expectedCpaPaise: option.expectedCpaPaise,
-      discountBps: option.discountBps,
-      eligible: option.passesDeterministicChecks,
-      deterministicChecks: option.deterministicChecks,
-      rejectionReasons: option.rejectionReasons
-    })),
-    qualityStatus: quality.review.status,
-    assetIds: creative.assets.map((asset) => asset.id)
+    ...campaignStage
   };
 }
 
@@ -409,7 +398,8 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
   });
   if (selection.selectedOption === null) {
     const rejectedSummary = await context.service.getCampaignSummary(campaign.id);
-    const campaignStage = buildCampaignStage(
+    const campaignStage = await buildCampaignStage(
+      context.repository,
       discovery.options,
       null,
       "NOT_STARTED",
@@ -456,7 +446,7 @@ export async function runFullLifecycle(input: z.infer<typeof demoLifecycleReques
     outputSummary: (result) => `Quality status ${result.review.status}; ${result.deterministicIssues.length} deterministic issues.`
   });
   const preparedSummary = await context.service.getCampaignSummary(campaign.id);
-  const campaignStage = buildCampaignStage(discovery.options, selection.selectedOption, quality.review.status, creative.assets.map((asset) => asset.id), campaign.id, preparedSummary.campaign.status);
+  const campaignStage = await buildCampaignStage(context.repository, discovery.options, selection.selectedOption, quality.review.status, creative.assets.map((asset) => asset.id), campaign.id, preparedSummary.campaign.status);
   const policyChecks = buildPolicyChecks(preparedSummary, campaignStage.options);
 
   if (input.prepareOnly) {
@@ -584,7 +574,7 @@ function defaultReservationTime(slotStartAt: string): string {
   return new Date(Date.parse(slotStartAt) + 30 * 60_000).toISOString();
 }
 
-type LifecycleOption = ReturnType<typeof buildCampaignStage>["options"][number];
+type LifecycleOption = Awaited<ReturnType<typeof buildCampaignStage>>["options"][number];
 type LifecycleTraceEvent = {
   id: string;
   step: string;
@@ -637,7 +627,8 @@ async function traced<T>(
   }
 }
 
-function buildCampaignStage(
+async function buildCampaignStage(
+  repository: StorageRepository,
   options: Awaited<ReturnType<CampaignService["discoverOptions"]>>["options"],
   selectedOption: Awaited<ReturnType<CampaignService["selectOption"]>>["selectedOption"],
   qualityStatus: string,
@@ -645,17 +636,24 @@ function buildCampaignStage(
   campaignId: string,
   status: string
 ) {
-  const mappedOptions = options.map((option) => ({
-    id: option.id,
-    packageId: option.packageId,
-    score: option.score,
-    totalCostPaise: option.totalCostPaise,
-    expectedReservations: option.expectedReservations,
-    expectedCpaPaise: option.expectedCpaPaise,
-    discountBps: option.discountBps,
-    eligible: option.passesDeterministicChecks,
-    deterministicChecks: option.deterministicChecks,
-    rejectionReasons: option.rejectionReasons
+  const mappedOptions = await Promise.all(options.map(async (option) => {
+    const promotionPackage = await repository.getPromotionPackage(option.packageId);
+    const provider = promotionPackage ? await repository.getProvider(promotionPackage.providerId) : null;
+
+    return {
+      id: option.id,
+      packageId: option.packageId,
+      providerName: provider?.name ?? "Unknown provider",
+      packageTitle: promotionPackage?.title ?? option.packageId,
+      score: option.score,
+      totalCostPaise: option.totalCostPaise,
+      expectedReservations: option.expectedReservations,
+      expectedCpaPaise: option.expectedCpaPaise,
+      discountBps: option.discountBps,
+      eligible: option.passesDeterministicChecks,
+      deterministicChecks: option.deterministicChecks,
+      rejectionReasons: option.rejectionReasons
+    };
   }));
   return {
     mode: "fixture",
