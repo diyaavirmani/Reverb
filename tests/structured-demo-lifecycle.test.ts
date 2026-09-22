@@ -87,6 +87,27 @@ describe("structured demo lifecycle input", () => {
     });
   });
 
+  it("anchors fixture packages through checkout for a future full lifecycle", async () => {
+    const response = await lifecycle({
+      campaign: campaignInput({ date: "2026-10-02" }),
+      reservation: {
+        customerName: "Future Guest",
+        customerContact: "future@example.test",
+        partySize: 2,
+        trackingCode: "future_full_lifecycle",
+        isDemoBooking: true
+      }
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      finalStatus: "ACTIVE",
+      selectedPackageId: "package_local_dining_boost",
+      merchantOrderId: expect.any(String)
+    });
+  }, 15_000);
+
   it("returns 200 with NO_ELIGIBLE_PACKAGE for a Rs 100 budget", async () => {
     const response = await lifecycle({
       campaign: campaignInput({ maximumBudgetPaise: 100 })

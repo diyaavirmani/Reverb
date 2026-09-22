@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { hashPayload } from "../security/signatures";
 import type { StorageRepository } from "../repositories";
+import { anchorFixturePackagesToCampaignSlot } from "./fixture-anchoring";
 import {
   AuditEventSchema,
   CampaignAssetSchema,
@@ -110,7 +111,7 @@ export class ReachExchangeService {
       });
     }
 
-    const promotionPackage = await this.requirePromotionPackage(request.packageId);
+    const promotionPackage = await this.requirePromotionPackageForCheckout(request.packageId, request.campaignId);
     const quote = this.toQuote(promotionPackage);
 
     if (!quote.available) {
@@ -448,6 +449,25 @@ export class ReachExchangeService {
     return promotionPackage;
   }
 
+  private async requirePromotionPackageForCheckout(
+    packageId: string,
+    campaignId: string
+  ): Promise<PromotionPackage> {
+    const promotionPackage = await this.requirePromotionPackage(packageId);
+
+    if (process.env.USE_FIXTURES !== "true") {
+      return promotionPackage;
+    }
+
+    const campaign = await this.repository.getCampaign(campaignId);
+
+    if (campaign === null) {
+      return promotionPackage;
+    }
+
+    return anchorFixturePackagesToCampaignSlot([promotionPackage], campaign.slotStartAt)[0] ?? promotionPackage;
+  }
+
   private async requireMerchantOrder(orderId: string): Promise<MerchantOrder> {
     const order = await this.repository.getMerchantOrder(orderId);
 
@@ -593,4 +613,3 @@ function requiredStringMetadata(value: unknown, label: string): string {
 
   return stringValue;
 }
-
