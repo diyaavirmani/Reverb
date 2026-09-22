@@ -13,7 +13,7 @@ export async function runApplicationEvals(): Promise<EvalSuiteResult[]> {
 
 if (isMainModule(import.meta.url)) {
   const suites = await runApplicationEvals();
-  await writeEvalReport(suites);
+  await writeEvalReport(suites, { tracked: process.argv.includes("--report") });
   logSuiteSummary("Application evals", suites.some((suite) => suite.status === "fail") ? "FAIL" : "PASS", statusLine(suites));
   exitForSuites(suites);
 }

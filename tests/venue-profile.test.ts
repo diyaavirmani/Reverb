@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDemoCampaignScheduleForWeekday } from "../src/components/demo-date";
+import {
+  ClerkMetadataSizeError,
+  clerkMetadataSafeBytes,
+  jsonByteSize,
+  prepareProfileForClerkMetadata
+} from "../src/lib/venue/clerk-profile";
 import { emptyReverbProfile, parseReverbProfile } from "../src/lib/venue/profile";
 import {
   analyzeVenueWebsite,
@@ -9,6 +15,8 @@ import {
   validatePublicWebsiteUrl,
   WebsiteAnalysisError
 } from "../src/lib/venue/website-analysis";
+
+vi.mock("server-only", () => ({}));
 
 function profileWithWebsite() {
   return {
@@ -36,6 +44,41 @@ describe("Reverb venue profile", () => {
     expect(result.sourceUrls).toEqual([]);
     expect(result.facts).toContain("Owner-entered venue: Cedar Room");
     expect(result.lastAnalyzedAt).toBe("2026-08-29T10:00:00.000Z");
+  });
+
+  it("trims large analysis metadata before storing a Clerk profile", () => {
+    const profile = {
+      ...profileWithWebsite(),
+      analysis: {
+        ...profileWithWebsite().analysis,
+        sourceStatuses: Array.from({ length: 8 }, (_, index) => ({
+          url: `https://cedar.example/${index}`,
+          status: "analyzed" as const,
+          detail: "x".repeat(240)
+        })),
+        facts: Array.from({ length: 24 }, () => "f".repeat(500)),
+        inferences: Array.from({ length: 16 }, () => "i".repeat(500))
+      }
+    };
+
+    const trimmed = prepareProfileForClerkMetadata(profile);
+
+    expect(jsonByteSize(trimmed)).toBeLessThanOrEqual(clerkMetadataSafeBytes);
+    expect(trimmed.analysis.sourceStatuses).toEqual([]);
+    expect(trimmed.analysis.facts).toEqual([]);
+    expect(trimmed.analysis.inferences).toEqual([]);
+  });
+
+  it("throws a typed error when trimming analysis still exceeds Clerk metadata margin", () => {
+    const profile = {
+      ...profileWithWebsite(),
+      brand: {
+        ...profileWithWebsite().brand,
+        summary: "s".repeat(8 * 1024)
+      }
+    };
+
+    expect(() => prepareProfileForClerkMetadata(profile)).toThrow(ClerkMetadataSizeError);
   });
 });
 

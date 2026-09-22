@@ -228,6 +228,9 @@ coverage/
 .env*.local
 !.env.example
 
+# Reverb runtime reports
+.reverb/
+
 # Package manager logs
 npm-debug.log*
 yarn-debug.log*

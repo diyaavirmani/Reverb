@@ -176,9 +176,14 @@ http://localhost:3000
 
 ## Deploying the Showcase
 
-The repository includes a Render blueprint in `render.yaml`. Create a new Render
-Web Service from this repository and either apply that blueprint or use the same
-commands:
+The repository includes a Render blueprint in `render.yaml`. Reverb's fixture
+store is copied once per Node process and kept in process-local storage, so the
+showcase requires a persistent single Node host such as Render. Serverless hosts
+such as Vercel are not supported for fixture deployment because separate
+invocations would not share campaign, reservation, or performance state.
+
+Create a Render Web Service from this repository and either apply the blueprint
+or use the same commands:
 
 ```text
 Build command: npm ci && npm run build
@@ -188,23 +193,29 @@ Health check: /api/health
 
 Render must use the Node runtime. Do not create this service as Python. Configure
 the two Clerk keys as Render secrets; never place their values in the repository.
+On Render's free plan, state can reset when the service restarts or sleeps.
 
-Minimum deployment variables for the fixture showcase:
+Use a Clerk **production** instance for deployment. Add the Render domain to the
+Clerk application and configure allowed redirect URLs for `/sign-in`,
+`/sign-up`, and `/app-entry`. The session-token claim `metadata.role` controls
+Reverb roles; when it is missing, Reverb defaults the user to `OWNER`.
 
-```env
-USE_FIXTURES=true
-APP_ENV=production
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
-```
-
-Recommended non-secret additions:
-
-```env
-APP_URL=https://your-deployment.example
-DEMO_SPOT_ID=spot_quiet_cup_cafe
-DEMO_TIMEZONE=Asia/Kolkata
-```
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk production publishable key, stored as a Render secret. |
+| `CLERK_SECRET_KEY` | Yes | Clerk production secret key, stored as a Render secret. |
+| `USE_FIXTURES` | Yes | Must be `true` for this deployment target. |
+| `APP_ENV` | Yes | Use `production` on Render. |
+| `APP_URL` | Yes | Public Render URL. |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Recommended | `/sign-in`. |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Recommended | `/sign-up`. |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Recommended | `/app-entry`. |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Recommended | `/app-entry`. |
+| `DEMO_SPOT_ID` | Recommended | `spot_quiet_cup_cafe`. |
+| `DEMO_TIMEZONE` | Recommended | `Asia/Kolkata`. |
+| `REVERB_FIXTURE_DATA_DIR` | Optional | Test/ops override for the shared fixture store. Usually blank on Render. |
+| `REACH_FIXTURE_DATA_DIR` | Optional | Backward-compatible fixture store override. Usually blank on Render. |
+| `REVERB_CURRENT_TIME` | Optional | Test/ops clock override. Leave blank for real time. |
 
 Paid provider keys are not mandatory for fixture deployment. Leave optional integration keys blank unless testing live integrations.
 
@@ -293,7 +304,7 @@ tableau/
 
 ## Deployment Notes
 
-The app is suitable for a Vercel deployment in fixture mode when the required Clerk and runtime environment variables are configured. Venue profiles are stored in the authenticated Clerk user's private metadata; the fixture lifecycle remains deterministic and does not depend on server-process memory. Configure the production domain and Clerk allowed redirect URLs for `/sign-in`, `/sign-up`, and `/app-entry` in the Clerk Dashboard.
+Deploy the fixture showcase to Render or another persistent Node host. Do not deploy it to serverless infrastructure for production demos because fixture campaign state is process-local and intentionally resets on process restart. Venue profiles are stored in the authenticated Clerk user's private metadata with an 8 KB Clerk metadata cap and a conservative Reverb save margin.
 
 ## Pre-Existing Work
 

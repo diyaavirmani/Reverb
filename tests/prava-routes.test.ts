@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { GET as getPaymentResult } from "../src/app/api/prava/result/route";
 import { POST as reportCheckoutOutcome } from "../src/app/api/prava/report/route";

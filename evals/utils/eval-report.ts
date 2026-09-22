@@ -4,9 +4,15 @@ import { join } from "node:path";
 import type { EvalCaseResult, EvalReport, EvalSuiteResult } from "./eval-types";
 import { containsForbiddenReportContent, redactText } from "./redaction-checks";
 
-export async function writeEvalReport(suites: EvalSuiteResult[]): Promise<EvalReport> {
+type EvalReportOptions = {
+  tracked?: boolean;
+};
+
+export async function writeEvalReport(suites: EvalSuiteResult[], options: EvalReportOptions = {}): Promise<EvalReport> {
   const report = buildEvalReport(suites);
-  const outputDirectory = join(process.cwd(), "evals", "reports");
+  const outputDirectory = options.tracked
+    ? join(process.cwd(), "evals", "reports")
+    : join(process.cwd(), ".reverb", "evals", "reports");
   const json = JSON.stringify(report, null, 2);
   const markdown = toMarkdown(report);
 

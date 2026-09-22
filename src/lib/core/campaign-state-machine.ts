@@ -1,4 +1,4 @@
-﻿import {
+import {
   CampaignSchema,
   type AuditEvent,
   type Campaign,

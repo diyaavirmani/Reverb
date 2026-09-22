@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
-import { getReverbProfile, saveReverbProfile } from "../../../../lib/venue/clerk-profile";
+import { ClerkMetadataSizeError, getReverbProfile, saveReverbProfile } from "../../../../lib/venue/clerk-profile";
 import { reverbVenueProfileSchema } from "../../../../lib/venue/profile";
 
 export async function GET() {
@@ -27,5 +27,12 @@ export async function PUT(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Review the highlighted venue details.", issues: parsed.error.issues }, { status: 400 });
   }
-  return NextResponse.json({ profile: await saveReverbProfile(userId, parsed.data) });
+  try {
+    return NextResponse.json({ profile: await saveReverbProfile(userId, parsed.data) });
+  } catch (error) {
+    if (error instanceof ClerkMetadataSizeError) {
+      return NextResponse.json({ error: error.message, code: "PROFILE_METADATA_TOO_LARGE" }, { status: 413 });
+    }
+    throw error;
+  }
 }

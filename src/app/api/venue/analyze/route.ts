@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireReverbApiPermission } from "../../../../lib/auth/api-authorization";
-import { saveReverbProfile } from "../../../../lib/venue/clerk-profile";
+import { ClerkMetadataSizeError, saveReverbProfile } from "../../../../lib/venue/clerk-profile";
 import { reverbVenueProfileSchema, type ReverbVenueProfile } from "../../../../lib/venue/profile";
 import { analyzeVenueWebsite, WebsiteAnalysisError } from "../../../../lib/venue/website-analysis";
 
@@ -43,6 +43,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof WebsiteAnalysisError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 422 });
+    }
+    if (error instanceof ClerkMetadataSizeError) {
+      return NextResponse.json({ error: error.message, code: "PROFILE_METADATA_TOO_LARGE" }, { status: 413 });
     }
     throw error;
   }

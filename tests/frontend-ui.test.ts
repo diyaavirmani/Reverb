@@ -122,6 +122,17 @@ describe("approved frontend journey", () => {
     expect(demoSharedSource).toContain("providerName");
     expect(demoSharedSource).toContain("packageTitle");
   });
+
+  it("keeps routine eval reports out of tracked report files", () => {
+    const reportSource = source("evals/utils/eval-report.ts");
+    const componentRunner = source("evals/runners/run-component-evals.ts");
+    const applicationRunner = source("evals/runners/run-application-evals.ts");
+
+    expect(reportSource).toContain('join(process.cwd(), ".reverb", "evals", "reports")');
+    expect(reportSource).toContain("options.tracked");
+    expect(componentRunner).toContain('process.argv.includes("--report")');
+    expect(applicationRunner).toContain('process.argv.includes("--report")');
+  });
 });
 
 function source(path: string) {

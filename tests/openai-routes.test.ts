@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { POST as explainDecisionPost } from "../src/app/api/ai/explain-decision/route";
 import { POST as generateCampaignPost } from "../src/app/api/ai/generate-campaign/route";

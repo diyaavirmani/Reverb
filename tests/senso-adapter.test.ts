@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createIntegrationAdapters, loadRuntimeConfig } from "../src/lib/adapters";
 import { LiveSensoAdapter } from "../src/lib/adapters/live";

@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { POST } from "../src/app/api/senso/verify-provider/route";
 import {
